@@ -1,0 +1,34 @@
+{
+  "persons": [
+    {
+      "id": 1,
+      "full_name": "Тестов Александр Николаевич",
+      "category": "soldier",
+      "role": "admin",
+      "unit": "1 ЗРДН",
+      "special_tag": "driver",
+      "login": "testov",
+      "password": "1234"
+    },
+    {
+      "id": 2,
+      "full_name": "Иванов Иван Иванович",
+      "category": "soldier",
+      "role": "user",
+      "unit": "1 ЗРДН",
+      "special_tag": null,
+      "login": "ivanov",
+      "password": "1111"
+    },
+    {
+      "id": 3,
+      "full_name": "Петров Пётр Петрович",
+      "category": "not_soldier",
+      "role": "user",
+      "unit": "КП",
+      "special_tag": null,
+      "login": "petrov",
+      "password": "2222"
+    }
+  ]
+}

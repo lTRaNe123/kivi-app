@@ -1,0 +1,369 @@
+#:kivy 2.1.0
+#:import dp kivy.metrics.dp
+
+
+<LoginScreen>:
+    login_input: login_input
+    password_input: password_input
+
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(20)
+        spacing: dp(10)
+
+        Label:
+            text: "Вход в систему"
+            font_size: "22sp"
+            size_hint_y: None
+            height: self.texture_size[1] + dp(10)
+
+        TextInput:
+            id: login_input
+            hint_text: "Логин"
+            multiline: False
+
+        TextInput:
+            id: password_input
+            hint_text: "Пароль"
+            password: True
+            multiline: False
+
+        Label:
+            text: root.message
+            color: 1, 0, 0, 1
+            size_hint_y: None
+            height: dp(40)
+
+        Button:
+            text: "Войти"
+            size_hint_y: None
+            height: dp(40)
+            on_release: root.do_login()
+
+
+<UserHomeScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(16)
+        spacing: dp(10)
+
+        Label:
+            id: lbl_user_name
+            text: "ФИО"
+            font_size: "18sp"
+            size_hint_y: None
+            height: self.texture_size[1] + dp(6)
+
+        Label:
+            id: lbl_user_info
+            text: "Звание / должность / подразделение"
+            size_hint_y: None
+            height: dp(60)
+
+        Label:
+            text: "Ожидает моего подтверждения:"
+            size_hint_y: None
+            height: self.texture_size[1] + dp(6)
+
+        ScrollView:
+            size_hint_y: 0.35
+            BoxLayout:
+                id: box_pending
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+
+        Label:
+            text: "Мой инвентарь:"
+            size_hint_y: None
+            height: self.texture_size[1] + dp(6)
+
+        ScrollView:
+            size_hint_y: 0.35
+            BoxLayout:
+                id: box_accepted
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+
+        Label:
+            text: root.status_text
+            size_hint_y: None
+            height: dp(24)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            spacing: dp(10)
+
+            Button:
+                text: "Передачи имущества"
+                on_release: root.goto_transfers()
+
+            Button:
+                text: "Книги / формы"
+                on_release: root.goto_forms()
+
+            Button:
+                text: "Выйти"
+                on_release:
+                    app.current_user = None
+                    app.root.current = "login"
+
+
+<TransferListScreen>:
+    incoming_box: box_incoming
+    outgoing_box: box_outgoing
+
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(16)
+        spacing: dp(8)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            spacing: dp(8)
+
+            Button:
+                text: "Обновить"
+                on_release: root.refresh()
+
+            Button:
+                text: "Создать передачу"
+                on_release: root.goto_create()
+
+            Button:
+                text: "Назад"
+                on_release: root.goto_home()
+
+        Label:
+            text: "Входящие (ожидают моего решения):"
+            size_hint_y: None
+            height: self.texture_size[1] + dp(4)
+
+        ScrollView:
+            size_hint_y: 0.4
+            BoxLayout:
+                id: box_incoming
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+
+        Label:
+            text: "Исходящие:"
+            size_hint_y: None
+            height: self.texture_size[1] + dp(4)
+
+        ScrollView:
+            size_hint_y: 0.4
+            BoxLayout:
+                id: box_outgoing
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+
+        Label:
+            text: root.status_text
+            size_hint_y: None
+            height: dp(24)
+
+
+<TransferCreateScreen>:
+    receiver_spinner: sp_receiver
+    comment_input: inp_comment
+    item_name_input: inp_name
+    item_qty_input: inp_qty
+    item_unit_input: inp_unit
+
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(16)
+        spacing: dp(8)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            spacing: dp(8)
+
+            Button:
+                text: "Назад"
+                on_release: root.goto_list()
+
+            Button:
+                text: "Обновить список людей"
+                on_release: root.load_users()
+
+        Label:
+            text: "Получатель:"
+            size_hint_y: None
+            height: self.texture_size[1] + dp(4)
+
+        Spinner:
+            id: sp_receiver
+            text: "выберите получателя"
+            size_hint_y: None
+            height: dp(40)
+            values: ()
+            on_text: root.on_receiver_selected(self.text)
+
+        Label:
+            text: "Комментарий:"
+            size_hint_y: None
+            height: self.texture_size[1] + dp(4)
+
+        TextInput:
+            id: inp_comment
+            multiline: True
+            size_hint_y: None
+            height: dp(70)
+
+        Label:
+            text: "Предмет 1:"
+            size_hint_y: None
+            height: self.texture_size[1] + dp(4)
+
+        TextInput:
+            id: inp_name
+            hint_text: "Название (например: Скотч)"
+            size_hint_y: None
+            height: dp(40)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            spacing: dp(8)
+
+            TextInput:
+                id: inp_qty
+                hint_text: "Кол-во"
+                input_filter: "float"
+
+            TextInput:
+                id: inp_unit
+                hint_text: "Ед. изм. (шт, рул...)"
+
+        Button:
+            text: "Отправить передачу"
+            size_hint_y: None
+            height: dp(40)
+            on_release: root.send_transfer()
+
+        Label:
+            text: root.status_text
+            size_hint_y: None
+            height: dp(24)
+
+
+<FormsMenuScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(16)
+        spacing: dp(8)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            spacing: dp(8)
+
+            Button:
+                text: "Назад"
+                on_release: app.root.current = "user_home"
+
+            Label:
+                text: "Книги / формы"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+
+        ScrollView:
+            BoxLayout:
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: dp(6)
+
+                Button:
+                    text: "Книга №10"
+                    size_hint_y: None
+                    height: dp(40)
+                    on_release: root.open_form("f10", "Книга №10")
+
+                Button:
+                    text: "Вечерняя поверка"
+                    size_hint_y: None
+                    height: dp(40)
+                    on_release: root.open_form("evening", "Вечерняя поверка")
+
+                Button:
+                    text: "Спальное расположение"
+                    size_hint_y: None
+                    height: dp(40)
+                    on_release: root.open_form("sleep", "Спальное расположение")
+
+                Button:
+                    text: "Штатка"
+                    size_hint_y: None
+                    height: dp(40)
+                    on_release: root.open_form("shtatka", "Штатка")
+
+        Label:
+            text: ""
+            size_hint_y: None
+            height: dp(10)
+
+
+<FormViewScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(10)
+        spacing: dp(8)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(40)
+            spacing: dp(8)
+
+            Button:
+                text: "Назад"
+                on_release: app.root.current = "forms_menu"
+
+            Button:
+                text: "Обновить"
+                on_release: root.load_form()
+
+        Label:
+            text: root.title_text
+            font_size: "18sp"
+            size_hint_y: None
+            height: self.texture_size[1] + dp(6)
+            halign: "center"
+            valign: "middle"
+            text_size: self.size
+
+        Label:
+            text: root.header_text
+            font_size: "16sp"
+            size_hint_y: None
+            height: self.texture_size[1] + dp(6)
+            halign: "center"
+            valign: "middle"
+            text_size: self.size
+
+        ScrollView:
+            do_scroll_x: False
+
+            GridLayout:
+                id: lines_grid
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                row_default_height: dp(28)
+                row_force_default: False
+                spacing: dp(2)
+
+        Label:
+            text: root.error_text
+            color: 1, 0, 0, 1
+            size_hint_y: None
+            height: dp(24)
