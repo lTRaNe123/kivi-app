@@ -1,7 +1,6 @@
 # main.py
 import threading
 import re
-import textwrap
 from collections import defaultdict
 
 from kivy.app import App
@@ -21,6 +20,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
+from kivy.uix.widget import Widget
 
 from api_client import api_client, ApiError
 
@@ -53,16 +53,13 @@ def make_inventory_label(text: str) -> Label:
     return lbl
 
 
-def format_form_lines_as_table(lines) -> str:
+def parse_form_lines(lines):
     """
-    Форматирует строки формы в стабильную текстовую таблицу.
+    Разбирает строки формы в табличные записи.
 
     Бэкенд сейчас отдаёт строки вида:
     "1. Название | Шт. | 100 руб. | категория: II"
     """
-    if not lines:
-        return "Нет данных для отображения"
-
     rows = []
     for idx, raw_line in enumerate(lines, start=1):
         raw = str(raw_line).strip()
@@ -89,60 +86,88 @@ def format_form_lines_as_table(lines) -> str:
         if len(parts) > 3:
             category = parts[3].replace("категория:", "").strip()
 
-        rows.append((number, name, unit, price, category))
+        rows.append({
+            "number": number,
+            "name": name,
+            "unit": unit,
+            "price": price,
+            "category": category,
+        })
 
-    widths = {
-        "number": 4,
-        "name": 46,
-        "unit": 8,
-        "price": 12,
-        "category": 10,
-    }
+    return rows
 
-    border = (
-        "+"
-        + "-" * widths["number"]
-        + "+"
-        + "-" * widths["name"]
-        + "+"
-        + "-" * widths["unit"]
-        + "+"
-        + "-" * widths["price"]
-        + "+"
-        + "-" * widths["category"]
-        + "+"
-    )
 
-    def row(number, name, unit, price, category):
-        name_lines = textwrap.wrap(name, widths["name"]) or [""]
-        out = []
-        for line_idx, name_part in enumerate(name_lines):
-            out.append(
-                "|"
-                + (number if line_idx == 0 else "").ljust(widths["number"])
-                + "|"
-                + name_part.ljust(widths["name"])
-                + "|"
-                + (unit if line_idx == 0 else "").ljust(widths["unit"])
-                + "|"
-                + (price if line_idx == 0 else "").ljust(widths["price"])
-                + "|"
-                + (category if line_idx == 0 else "").ljust(widths["category"])
-                + "|"
-            )
-        return out
+class TableCell(Label):
+    pass
 
-    table = [
-        border,
-        *row("№", "Наименование", "Ед.", "Цена", "Категория"),
-        border,
+
+class TableSeparator(Widget):
+    pass
+
+
+def add_table_cell(row, text, width, height=38, bold=False, align="center"):
+    row.add_widget(TableCell(
+        text=str(text or ""),
+        width=dp(width),
+        height=dp(height),
+        bold=bold,
+        halign=align,
+    ))
+
+
+def render_form_table(container, lines) -> None:
+    """Рисует форму как визуальную таблицу, а не как консольный текст."""
+    container.clear_widgets()
+
+    rows = parse_form_lines(lines)
+    if not rows:
+        status_row = BoxLayout(
+            orientation="horizontal",
+            size_hint=(None, None),
+            width=dp(720),
+            height=dp(42),
+        )
+        add_table_cell(status_row, "Нет данных для отображения", 720, 42)
+        container.add_widget(status_row)
+        return
+
+    columns = [
+        ("number", "№", 60),
+        ("name", "Наименование", 520),
+        ("unit", "Ед.", 110),
+        ("price", "Цена", 140),
+        ("category", "Категория", 150),
     ]
+    total_width = sum(col[2] for col in columns)
+    container.width = dp(total_width)
+
+    header = BoxLayout(
+        orientation="horizontal",
+        size_hint=(None, None),
+        width=dp(total_width),
+        height=dp(54),
+    )
+    for _key, title, width in columns:
+        add_table_cell(header, title, width, 54, bold=True)
+    container.add_widget(header)
+
+    container.add_widget(TableSeparator(
+        size_hint=(None, None),
+        width=dp(total_width),
+        height=dp(5),
+    ))
 
     for item in rows:
-        table.extend(row(*item))
-        table.append(border)
-
-    return "\n".join(table)
+        row_height = 64 if len(item["name"]) > 42 else 42
+        row = BoxLayout(
+            orientation="horizontal",
+            size_hint=(None, None),
+            width=dp(total_width),
+            height=dp(row_height),
+        )
+        for key, _title, width in columns:
+            add_table_cell(row, item[key], width, row_height, align="left" if key == "name" else "center")
+        container.add_widget(row)
 
 
 def build_inventory_from_docs(docs):
@@ -688,7 +713,7 @@ class FormViewScreen(Screen):
         self.title_text = title
         self.header_text = ""
         self.error_text = ""
-        self.ids.lines_text.text = ""
+        self.ids.lines_table.clear_widgets()
 
     def on_pre_enter(self, *args) -> None:
         """При заходе на экран подгружаем форму."""
@@ -697,8 +722,16 @@ class FormViewScreen(Screen):
 
     def load_form(self) -> None:
         """Запрашиваем данные формы у API и заполняем таблицу."""
-        lines_text = self.ids.lines_text
-        lines_text.text = "Загружаем данные..."
+        table = self.ids.lines_table
+        table.clear_widgets()
+        status_row = BoxLayout(
+            orientation="horizontal",
+            size_hint=(None, None),
+            width=dp(720),
+            height=dp(42),
+        )
+        add_table_cell(status_row, "Загружаем данные...", 720, 42)
+        table.add_widget(status_row)
         self.error_text = ""
         self.header_text = ""
 
@@ -713,7 +746,7 @@ class FormViewScreen(Screen):
                 msg = f"Ошибка загрузки: {exc}"
 
                 def ui_fail(dt, msg=msg):
-                    self.ids.lines_text.text = ""
+                    self.ids.lines_table.clear_widgets()
                     self.header_text = ""
                     self.error_text = msg
 
@@ -725,7 +758,7 @@ class FormViewScreen(Screen):
                 # поддержим и 'lines', и 'rows', если бэкенд вернёт так
                 lines = data.get("lines") or data.get("rows") or []
 
-                self.ids.lines_text.text = format_form_lines_as_table(lines)
+                render_form_table(self.ids.lines_table, lines)
 
                 self.error_text = ""
 

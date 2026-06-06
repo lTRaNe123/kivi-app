@@ -2,6 +2,35 @@
 #:import dp kivy.metrics.dp
 
 
+<TableCell>:
+    size_hint: None, None
+    color: 0.05, 0.38, 0.08, 1
+    font_size: "14sp"
+    valign: "middle"
+    text_size: self.width - dp(8), self.height - dp(6)
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    canvas.after:
+        Color:
+            rgba: 0.45, 0.45, 0.45, 1
+        Line:
+            rectangle: self.x, self.y, self.width, self.height
+            width: 1
+
+
+<TableSeparator>:
+    canvas.before:
+        Color:
+            rgba: 0, 0, 1, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+
 <LoginScreen>:
     login_input: login_input
     password_input: password_input
@@ -350,16 +379,23 @@
             valign: "middle"
             text_size: self.size
 
-        TextInput:
-            id: lines_text
-            readonly: True
-            multiline: True
-            do_wrap: False
-            font_name: "fonts/DejaVuSansMono.ttf"
-            font_size: "11sp"
-            background_color: 0, 0, 0, 0
-            foreground_color: 1, 1, 1, 1
-            cursor_color: 0, 0, 0, 0
+        ScrollView:
+            do_scroll_x: True
+            do_scroll_y: True
+            bar_width: dp(8)
+            canvas.before:
+                Color:
+                    rgba: 1, 1, 1, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+
+            BoxLayout:
+                id: lines_table
+                orientation: "vertical"
+                size_hint: None, None
+                width: self.minimum_width
+                height: self.minimum_height
 
         Label:
             text: root.error_text
