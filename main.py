@@ -1,5 +1,7 @@
 # main.py
 import threading
+import re
+import textwrap
 from collections import defaultdict
 
 from kivy.app import App
@@ -49,6 +51,98 @@ def make_inventory_label(text: str) -> Label:
 
     lbl.bind(width=_on_width, texture_size=_on_texture_size)
     return lbl
+
+
+def format_form_lines_as_table(lines) -> str:
+    """
+    Форматирует строки формы в стабильную текстовую таблицу.
+
+    Бэкенд сейчас отдаёт строки вида:
+    "1. Название | Шт. | 100 руб. | категория: II"
+    """
+    if not lines:
+        return "Нет данных для отображения"
+
+    rows = []
+    for idx, raw_line in enumerate(lines, start=1):
+        raw = str(raw_line).strip()
+        parts = [part.strip() for part in raw.split("|")]
+
+        number = str(idx)
+        name = raw
+        unit = ""
+        price = ""
+        category = ""
+
+        if parts:
+            match = re.match(r"^(\d+)[\.\)]?\s*(.*)$", parts[0])
+            if match:
+                number = match.group(1)
+                name = match.group(2).strip()
+            else:
+                name = parts[0]
+
+        if len(parts) > 1:
+            unit = parts[1]
+        if len(parts) > 2:
+            price = parts[2]
+        if len(parts) > 3:
+            category = parts[3].replace("категория:", "").strip()
+
+        rows.append((number, name, unit, price, category))
+
+    widths = {
+        "number": 4,
+        "name": 46,
+        "unit": 8,
+        "price": 12,
+        "category": 10,
+    }
+
+    border = (
+        "+"
+        + "-" * widths["number"]
+        + "+"
+        + "-" * widths["name"]
+        + "+"
+        + "-" * widths["unit"]
+        + "+"
+        + "-" * widths["price"]
+        + "+"
+        + "-" * widths["category"]
+        + "+"
+    )
+
+    def row(number, name, unit, price, category):
+        name_lines = textwrap.wrap(name, widths["name"]) or [""]
+        out = []
+        for line_idx, name_part in enumerate(name_lines):
+            out.append(
+                "|"
+                + (number if line_idx == 0 else "").ljust(widths["number"])
+                + "|"
+                + name_part.ljust(widths["name"])
+                + "|"
+                + (unit if line_idx == 0 else "").ljust(widths["unit"])
+                + "|"
+                + (price if line_idx == 0 else "").ljust(widths["price"])
+                + "|"
+                + (category if line_idx == 0 else "").ljust(widths["category"])
+                + "|"
+            )
+        return out
+
+    table = [
+        border,
+        *row("№", "Наименование", "Ед.", "Цена", "Категория"),
+        border,
+    ]
+
+    for item in rows:
+        table.extend(row(*item))
+        table.append(border)
+
+    return "\n".join(table)
 
 
 def build_inventory_from_docs(docs):
@@ -631,12 +725,7 @@ class FormViewScreen(Screen):
                 # поддержим и 'lines', и 'rows', если бэкенд вернёт так
                 lines = data.get("lines") or data.get("rows") or []
 
-                text = (
-                    "\n".join(str(line) for line in lines)
-                    if lines
-                    else "Нет данных для отображения"
-                )
-                self.ids.lines_text.text = text
+                self.ids.lines_text.text = format_form_lines_as_table(lines)
 
                 self.error_text = ""
 
