@@ -594,8 +594,7 @@ class FormViewScreen(Screen):
         self.title_text = title
         self.header_text = ""
         self.error_text = ""
-        # очищаем прошлые строки
-        self.ids.lines_grid.clear_widgets()
+        self.ids.lines_text.text = ""
 
     def on_pre_enter(self, *args) -> None:
         """При заходе на экран подгружаем форму."""
@@ -604,27 +603,14 @@ class FormViewScreen(Screen):
 
     def load_form(self) -> None:
         """Запрашиваем данные формы у API и заполняем таблицу."""
-        grid = self.ids.lines_grid
-        grid.clear_widgets()
+        lines_text = self.ids.lines_text
+        lines_text.text = "Загружаем данные..."
         self.error_text = ""
         self.header_text = ""
 
         if not self._code:
             self.error_text = "Код формы не задан"
             return
-
-        # временная надпись, пока грузим
-        loading_lbl = Label(
-            text="Загружаем данные...",
-            size_hint_y=None,
-            height=dp(24),
-            halign="left",
-            valign="middle",
-        )
-        loading_lbl.bind(
-            size=lambda inst, *_: setattr(inst, "text_size", inst.size)
-        )
-        grid.add_widget(loading_lbl)
 
         def worker():
             try:
@@ -633,8 +619,7 @@ class FormViewScreen(Screen):
                 msg = f"Ошибка загрузки: {exc}"
 
                 def ui_fail(dt, msg=msg):
-                    grid = self.ids.lines_grid
-                    grid.clear_widgets()
+                    self.ids.lines_text.text = ""
                     self.header_text = ""
                     self.error_text = msg
 
@@ -642,9 +627,6 @@ class FormViewScreen(Screen):
                 return
 
             def ui_ok(dt, data=data):
-                grid = self.ids.lines_grid
-                grid.clear_widgets()
-
                 self.header_text = data.get("header") or ""
                 # поддержим и 'lines', и 'rows', если бэкенд вернёт так
                 lines = data.get("lines") or data.get("rows") or []
@@ -654,7 +636,7 @@ class FormViewScreen(Screen):
                     if lines
                     else "Нет данных для отображения"
                 )
-                grid.add_widget(make_inventory_label(text))
+                self.ids.lines_text.text = text
 
                 self.error_text = ""
 

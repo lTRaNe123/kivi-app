@@ -350,17 +350,14 @@
             valign: "middle"
             text_size: self.size
 
-        ScrollView:
-            do_scroll_x: False
-
-            GridLayout:
-                id: lines_grid
-                cols: 1
-                size_hint_y: None
-                height: self.minimum_height
-                row_default_height: dp(28)
-                row_force_default: False
-                spacing: dp(2)
+        TextInput:
+            id: lines_text
+            readonly: True
+            multiline: True
+            font_size: "14sp"
+            background_color: 0, 0, 0, 0
+            foreground_color: 1, 1, 1, 1
+            cursor_color: 0, 0, 0, 0
 
         Label:
             text: root.error_text
