@@ -1,6 +1,7 @@
 # main.py
 import threading
 import re
+import webbrowser
 from collections import defaultdict
 
 from kivy.app import App
@@ -97,29 +98,100 @@ def parse_form_lines(lines):
     return rows
 
 
+def escape_markup(value) -> str:
+    return (
+        str(value or "")
+        .replace("&", "&amp;")
+        .replace("[", "&bl;")
+        .replace("]", "&br;")
+    )
+
+
 class TableCell(Label):
-    pass
+    href = StringProperty("")
+
+    def on_touch_up(self, touch):
+        if self.href and self.collide_point(*touch.pos):
+            webbrowser.open(self.href)
+            return True
+        return super().on_touch_up(touch)
 
 
 class TableSeparator(Widget):
     pass
 
 
-def add_table_cell(row, text, width, height=38, bold=False, align="center"):
+def add_table_cell(row, text, width, height=38, bold=False, align="center", href=""):
+    display = escape_markup(text)
+    if href:
+        display = f"[u][color=0645AD]{display}[/color][/u]"
+
     row.add_widget(TableCell(
-        text=str(text or ""),
+        text=display,
         width=dp(width),
         height=dp(height),
         bold=bold,
         halign=align,
+        markup=True,
+        href=str(href or ""),
     ))
 
 
-def render_form_table(container, lines) -> None:
+def normalize_columns(table, fallback_rows):
+    columns = table.get("columns") if isinstance(table, dict) else None
+    if isinstance(columns, list) and columns:
+        out = []
+        for col in columns:
+            if isinstance(col, dict):
+                key = str(col.get("key") or col.get("id") or col.get("title") or "")
+                title = str(col.get("title") or col.get("label") or key)
+                width = int(col.get("width") or 130)
+                align = str(col.get("align") or "center")
+                if key:
+                    out.append((key, title, width, align))
+        if out:
+            return out
+
+    return [
+        ("number", "№", 60, "center"),
+        ("name", "Наименование", 520, "left"),
+        ("unit", "Ед.", 110, "center"),
+        ("price", "Цена", 140, "center"),
+        ("category", "Категория", 150, "center"),
+    ]
+
+
+def normalize_rows(table, lines):
+    rows = table.get("rows") if isinstance(table, dict) else None
+    if isinstance(rows, list):
+        return rows
+    return parse_form_lines(lines)
+
+
+def get_cell_value(row_data, key):
+    if isinstance(row_data, dict):
+        cells = row_data.get("cells")
+        if isinstance(cells, dict) and key in cells:
+            cell = cells[key]
+        else:
+            cell = row_data.get(key, "")
+    else:
+        cell = ""
+
+    if isinstance(cell, dict):
+        return cell.get("text") or cell.get("value") or "", cell.get("href") or cell.get("url") or ""
+    return cell, ""
+
+
+def render_form_table(container, data) -> None:
     """Рисует форму как визуальную таблицу, а не как консольный текст."""
     container.clear_widgets()
 
-    rows = parse_form_lines(lines)
+    table = data.get("table") if isinstance(data, dict) else None
+    lines = []
+    if isinstance(data, dict):
+        lines = data.get("lines") or data.get("rows") or []
+    rows = normalize_rows(table, lines)
     if not rows:
         status_row = BoxLayout(
             orientation="horizontal",
@@ -131,13 +203,7 @@ def render_form_table(container, lines) -> None:
         container.add_widget(status_row)
         return
 
-    columns = [
-        ("number", "№", 60),
-        ("name", "Наименование", 520),
-        ("unit", "Ед.", 110),
-        ("price", "Цена", 140),
-        ("category", "Категория", 150),
-    ]
+    columns = normalize_columns(table if isinstance(table, dict) else {}, rows)
     total_width = sum(col[2] for col in columns)
     container.width = dp(total_width)
 
@@ -147,7 +213,7 @@ def render_form_table(container, lines) -> None:
         width=dp(total_width),
         height=dp(54),
     )
-    for _key, title, width in columns:
+    for _key, title, width, align in columns:
         add_table_cell(header, title, width, 54, bold=True)
     container.add_widget(header)
 
@@ -157,16 +223,30 @@ def render_form_table(container, lines) -> None:
         height=dp(5),
     ))
 
-    for item in rows:
-        row_height = 64 if len(item["name"]) > 42 else 42
+    for row_data in rows:
+        row_type = row_data.get("type") if isinstance(row_data, dict) else ""
+        if row_type == "separator":
+            container.add_widget(TableSeparator(
+                size_hint=(None, None),
+                width=dp(total_width),
+                height=dp(5),
+            ))
+            continue
+
+        row_height = int(row_data.get("height") or 42) if isinstance(row_data, dict) else 42
+        name_value, _href = get_cell_value(row_data, "name")
+        if len(str(name_value)) > 42:
+            row_height = max(row_height, 64)
+
         row = BoxLayout(
             orientation="horizontal",
             size_hint=(None, None),
             width=dp(total_width),
             height=dp(row_height),
         )
-        for key, _title, width in columns:
-            add_table_cell(row, item[key], width, row_height, align="left" if key == "name" else "center")
+        for key, _title, width, align in columns:
+            value, href = get_cell_value(row_data, key)
+            add_table_cell(row, value, width, row_height, align=align, href=href)
         container.add_widget(row)
 
 
@@ -755,10 +835,7 @@ class FormViewScreen(Screen):
 
             def ui_ok(dt, data=data):
                 self.header_text = data.get("header") or ""
-                # поддержим и 'lines', и 'rows', если бэкенд вернёт так
-                lines = data.get("lines") or data.get("rows") or []
-
-                render_form_table(self.ids.lines_table, lines)
+                render_form_table(self.ids.lines_table, data)
 
                 self.error_text = ""
 
