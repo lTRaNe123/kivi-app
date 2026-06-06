@@ -206,6 +206,95 @@ def get_row_href(row_data, key):
     return str(href or "")
 
 
+def normalize_material_name(value):
+    return re.sub(r"\s+", " ", str(value or "").strip()).lower()
+
+
+def build_material_movements(assignments):
+    movements = defaultdict(list)
+
+    for doc in assignments or []:
+        doc_name = doc.get("name") or ""
+        doc_num = doc.get("num") or ""
+        doc_date = doc.get("date_nak") or ""
+        status = doc.get("status") or ""
+
+        for item in doc.get("items") or []:
+            name = item.get("name") or ""
+            key = normalize_material_name(name)
+            if not key:
+                continue
+
+            qty = item.get("qty") or ""
+            unit = item.get("unit") or ""
+            movements[key].append({
+                "date": doc_date,
+                "doc_name": doc_name,
+                "doc_num": doc_num,
+                "doc_date": doc_date,
+                "supplier": status,
+                "in": qty,
+                "out": "",
+                "total": qty,
+                "unit": unit,
+            })
+
+    return movements
+
+
+def attach_material_details(data, assignments):
+    table = data.get("table") if isinstance(data, dict) else None
+    lines = []
+    if isinstance(data, dict):
+        lines = data.get("lines") or data.get("rows") or []
+    rows = normalize_rows(table, lines)
+    movements = build_material_movements(assignments)
+
+    for row in rows:
+        name = get_row_text(row, "name")
+        key = normalize_material_name(name)
+        item_movements = movements.get(key) or []
+        row["detail"] = build_material_detail_table(row, item_movements)
+
+    data["table"] = {
+        "columns": normalize_columns(table if isinstance(table, dict) else {}, rows),
+        "rows": rows,
+    }
+    return data
+
+
+def build_material_detail_table(item, movements):
+    columns = [
+        ("date", "Дата записи", 110, "center"),
+        ("doc_name", "Наименование документа", 190, "center"),
+        ("doc_num", "№ документа", 100, "center"),
+        ("doc_date", "Дата документа", 120, "center"),
+        ("supplier", "Статус/получатель", 150, "center"),
+        ("in", "Приход", 80, "center"),
+        ("out", "Расход", 80, "center"),
+        ("total", "Остаток", 80, "center"),
+        ("unit", "Ед.", 80, "center"),
+    ]
+
+    rows = []
+    balance = 0.0
+    for movement in movements:
+        row = dict(movement)
+        try:
+            balance += float(str(row.get("in") or 0).replace(",", "."))
+        except ValueError:
+            pass
+        row["total"] = int(balance) if balance.is_integer() else balance
+        rows.append(row)
+
+    return {
+        "table": {
+            "columns": columns,
+            "rows": rows,
+        }
+    }
+
+
 def make_site_list_button(text):
     return Button(
         text=str(text or ""),
@@ -247,8 +336,8 @@ def make_detail_table_data(item):
 
 
 def open_material_popup(item):
-    detail = make_detail_table_data(item)
-    meta = detail["meta"]
+    meta = make_detail_table_data(item)["meta"]
+    detail = item.get("detail") if isinstance(item, dict) else None
 
     root = BoxLayout(orientation="vertical", spacing=dp(12), padding=dp(14))
     set_widget_background(root, (1, 1, 1, 1))
@@ -278,16 +367,34 @@ def open_material_popup(item):
         info.add_widget(row)
     root.add_widget(info)
 
-    root.add_widget(Label(
-        text="Полная история движения открывается на сайте.",
-        color=(0.25, 0.25, 0.25, 1),
-        size_hint_y=None,
-        height=dp(44),
-        font_size="15sp",
-        halign="center",
-        valign="middle",
-        text_size=(dp(900), dp(44)),
-    ))
+    detail_rows = []
+    if isinstance(detail, dict):
+        detail_table = detail.get("table") or {}
+        detail_rows = detail_table.get("rows") or []
+
+    if detail_rows:
+        scroller = ScrollView(do_scroll_x=True, do_scroll_y=True, bar_width=dp(8))
+        table_box = BoxLayout(
+            orientation="vertical",
+            size_hint=(None, None),
+            width=dp(1000),
+            height=dp(1),
+        )
+        table_box.bind(minimum_height=table_box.setter("height"))
+        render_form_table(table_box, detail)
+        scroller.add_widget(table_box)
+        root.add_widget(scroller)
+    else:
+        root.add_widget(Label(
+            text="По этому предмету нет движения в доступных API.",
+            color=(0.25, 0.25, 0.25, 1),
+            size_hint_y=None,
+            height=dp(44),
+            font_size="15sp",
+            halign="center",
+            valign="middle",
+            text_size=(dp(900), dp(44)),
+        ))
 
     footer = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
     site_href = get_row_href(item, "name")
@@ -300,7 +407,7 @@ def open_material_popup(item):
     popup = Popup(
         title="",
         content=root,
-        size_hint=(0.78, 0.52),
+        size_hint=(0.86, 0.82 if detail_rows else 0.52),
         auto_dismiss=True,
     )
 
@@ -979,6 +1086,12 @@ class FormViewScreen(Screen):
         def worker():
             try:
                 data = api_client.get_form(self._code)
+                if self._code in ("f10", "book10"):
+                    try:
+                        assignments = api_client.get_assignments()
+                    except Exception:
+                        assignments = []
+                    data = attach_material_details(data, assignments)
             except Exception as exc:
                 msg = f"Ошибка загрузки: {exc}"
 
