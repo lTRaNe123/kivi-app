@@ -89,6 +89,15 @@ class ApiClient:
 
     # ----- публичные методы -----
 
+    def health(self) -> Dict[str, Any]:
+        """
+        GET /api/health.php
+
+        Проверяет, что мобильное приложение смотрит на тот же сервер,
+        где поднят сайт и PHP API. Не требует авторизации.
+        """
+        return self._request_json("GET", "health.php")
+
     def login(self, username: str, password: str) -> Dict[str, Any]:
         """
         POST /api/login.php
@@ -237,5 +246,5 @@ class ApiClient:
 
 # ----- ГЛОБАЛЬНЫЙ КЛИЕНТ ДЛЯ main.py -----
 
-BASE_URL = "http://85.159.231.68"   # без /api в конце
+BASE_URL = "http://82.25.61.87:28920"   # сайт + PHP API, без /api в конце
 api_client = ApiClient(BASE_URL)
