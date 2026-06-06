@@ -4,7 +4,6 @@ from collections import defaultdict
 
 from kivy.app import App
 from kivy.clock import Clock
-from kivy.clock import Clock
 
 Clock.max_iteration = 1000
 
@@ -650,33 +649,12 @@ class FormViewScreen(Screen):
                 # поддержим и 'lines', и 'rows', если бэкенд вернёт так
                 lines = data.get("lines") or data.get("rows") or []
 
-                if not lines:
-                    no_data_lbl = Label(
-                        text="Нет данных для отображения",
-                        size_hint_y=None,
-                        height=dp(24),
-                        halign="left",
-                        valign="middle",
-                    )
-                    no_data_lbl.bind(
-                        size=lambda inst, *_: setattr(inst, "text_size", inst.size)
-                    )
-                    grid.add_widget(no_data_lbl)
-                else:
-                    for line in lines:
-                        txt = str(line)
-                        lbl = Label(
-                            text=txt,
-                            size_hint_y=None,
-                            height=dp(24),
-                            halign="left",
-                            valign="middle",
-                        )
-                        # перенос по ширине, но без сложной математики по высоте
-                        lbl.bind(
-                            size=lambda inst, *_: setattr(inst, "text_size", inst.size)
-                        )
-                        grid.add_widget(lbl)
+                text = (
+                    "\n".join(str(line) for line in lines)
+                    if lines
+                    else "Нет данных для отображения"
+                )
+                grid.add_widget(make_inventory_label(text))
 
                 self.error_text = ""
 
