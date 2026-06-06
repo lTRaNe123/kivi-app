@@ -265,15 +265,34 @@ def attach_material_details(data, assignments):
 
 def build_material_detail_table(item, movements):
     columns = [
-        ("date", "Дата записи", 110, "center"),
-        ("doc_name", "Наименование документа", 190, "center"),
-        ("doc_num", "№ документа", 100, "center"),
+        ("date", "Дата записи", 105, "center"),
+        ("doc_name", "Наименование документа", 185, "center"),
+        ("doc_num", "№ документа", 95, "center"),
         ("doc_date", "Дата документа", 120, "center"),
-        ("supplier", "Статус/получатель", 150, "center"),
-        ("in", "Приход", 80, "center"),
-        ("out", "Расход", 80, "center"),
-        ("total", "Остаток", 80, "center"),
-        ("unit", "Ед.", 80, "center"),
+        ("supplier", "Поставщик(получатель)", 190, "center"),
+        ("in", "Прибыло", 75, "center"),
+        ("out", "Убыло", 70, "center"),
+        ("total", "Всего", 70, "center"),
+        ("cat1", "I", 48, "center"),
+        ("cat2", "II", 48, "center"),
+        ("cat3", "III", 48, "center"),
+        ("cat4", "IV", 48, "center"),
+        ("cat5", "V", 48, "center"),
+        ("zrdn1", "I ЗРДН", 85, "center"),
+        ("zrdn2", "II ЗРДН", 85, "center"),
+        ("zrdn3", "III ЗРДН", 85, "center"),
+        ("kp", "КП", 70, "center"),
+        ("cell18", "18", 44, "center"),
+        ("cell19", "19", 44, "center"),
+        ("cell20", "20", 44, "center"),
+        ("cell21", "21", 44, "center"),
+        ("cell22", "22", 44, "center"),
+        ("cell23", "23", 44, "center"),
+        ("cell24", "24", 44, "center"),
+        ("cell25", "25", 44, "center"),
+        ("cell26", "26", 44, "center"),
+        ("cell27", "27", 44, "center"),
+        ("cell28", "28", 44, "center"),
     ]
 
     rows = []
@@ -286,6 +305,22 @@ def build_material_detail_table(item, movements):
             pass
         row["total"] = int(balance) if balance.is_integer() else balance
         rows.append(row)
+
+    if not rows:
+        rows.append({
+            "date": "",
+            "doc_name": "[данных движения нет в API]",
+            "doc_num": "",
+            "doc_date": "",
+            "supplier": "",
+            "in": "",
+            "out": "",
+            "total": "",
+            "height": 42,
+        })
+
+    while len(rows) < 10:
+        rows.append({"height": 42})
 
     return {
         "table": {
@@ -372,29 +407,18 @@ def open_material_popup(item):
         detail_table = detail.get("table") or {}
         detail_rows = detail_table.get("rows") or []
 
-    if detail_rows:
-        scroller = ScrollView(do_scroll_x=True, do_scroll_y=True, bar_width=dp(8))
-        table_box = BoxLayout(
-            orientation="vertical",
-            size_hint=(None, None),
-            width=dp(1000),
-            height=dp(1),
-        )
-        table_box.bind(minimum_height=table_box.setter("height"))
+    scroller = ScrollView(do_scroll_x=True, do_scroll_y=True, bar_width=dp(8))
+    table_box = BoxLayout(
+        orientation="vertical",
+        size_hint=(None, None),
+        width=dp(1900),
+        height=dp(1),
+    )
+    table_box.bind(minimum_height=table_box.setter("height"))
+    if detail:
         render_form_table(table_box, detail)
-        scroller.add_widget(table_box)
-        root.add_widget(scroller)
-    else:
-        root.add_widget(Label(
-            text="По этому предмету нет движения в доступных API.",
-            color=(0.25, 0.25, 0.25, 1),
-            size_hint_y=None,
-            height=dp(44),
-            font_size="15sp",
-            halign="center",
-            valign="middle",
-            text_size=(dp(900), dp(44)),
-        ))
+    scroller.add_widget(table_box)
+    root.add_widget(scroller)
 
     footer = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
     site_href = get_row_href(item, "name")
@@ -407,7 +431,7 @@ def open_material_popup(item):
     popup = Popup(
         title="",
         content=root,
-        size_hint=(0.86, 0.82 if detail_rows else 0.52),
+        size_hint=(0.97, 0.94),
         auto_dismiss=True,
     )
 
