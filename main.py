@@ -25,6 +25,7 @@ from kivy.uix.popup import Popup
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.widget import Widget
+from kivy.graphics import Color, Rectangle
 
 from api_client import api_client, ApiError
 
@@ -217,6 +218,18 @@ def make_site_list_button(text):
     )
 
 
+def set_widget_background(widget, rgba):
+    with widget.canvas.before:
+        Color(*rgba)
+        rect = Rectangle(pos=widget.pos, size=widget.size)
+
+    def update_rect(instance, _value):
+        rect.pos = instance.pos
+        rect.size = instance.size
+
+    widget.bind(pos=update_rect, size=update_rect)
+
+
 def make_detail_table_data(item):
     name = get_row_text(item, "name")
     unit = get_row_text(item, "unit")
@@ -238,6 +251,7 @@ def open_material_popup(item):
     meta = detail["meta"]
 
     root = BoxLayout(orientation="vertical", spacing=dp(12), padding=dp(14))
+    set_widget_background(root, (1, 1, 1, 1))
 
     title_row = BoxLayout(size_hint_y=None, height=dp(38), spacing=dp(8))
     title_row.add_widget(Label(
@@ -265,12 +279,14 @@ def open_material_popup(item):
     root.add_widget(info)
 
     root.add_widget(Label(
-        text="История движения и остатки пока не приходят из API. Откройте позицию на сайте для полной книги.",
-        color=(0.75, 0.75, 0.75, 1),
+        text="Полная история движения открывается на сайте.",
+        color=(0.25, 0.25, 0.25, 1),
+        size_hint_y=None,
+        height=dp(44),
         font_size="15sp",
         halign="center",
         valign="middle",
-        text_size=(dp(900), dp(80)),
+        text_size=(dp(900), dp(44)),
     ))
 
     footer = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
@@ -284,7 +300,7 @@ def open_material_popup(item):
     popup = Popup(
         title="",
         content=root,
-        size_hint=(0.92, 0.9),
+        size_hint=(0.78, 0.52),
         auto_dismiss=True,
     )
 
