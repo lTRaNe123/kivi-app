@@ -223,35 +223,7 @@ def make_detail_table_data(item):
     price = get_row_text(item, "price")
     category = get_row_text(item, "category")
 
-    columns = [
-        ("date", "Дата записи", 110, "center"),
-        ("doc_name", "Наименование документа", 190, "center"),
-        ("doc_num", "№ документа", 100, "center"),
-        ("doc_date", "Дата документа", 120, "center"),
-        ("supplier", "Поставщик(получатель)", 200, "center"),
-        ("in", "Прибыло", 80, "center"),
-        ("out", "Убыло", 70, "center"),
-        ("total", "Всего", 70, "center"),
-        ("cat1", "I", 55, "center"),
-        ("cat2", "II", 55, "center"),
-        ("cat3", "III", 55, "center"),
-        ("cat4", "IV", 55, "center"),
-        ("cat5", "V", 55, "center"),
-        ("unit1", "I ЗРДН", 85, "center"),
-        ("unit2", "II ЗРДН", 85, "center"),
-        ("unit3", "III ЗРДН", 85, "center"),
-        ("kp", "КП", 70, "center"),
-    ]
-
-    rows = [
-        {"date": "", "doc_name": "Нет данных движения от сервера", "height": 42},
-    ]
-
     return {
-        "table": {
-            "columns": columns,
-            "rows": rows,
-        },
         "meta": {
             "name": name,
             "unit": unit,
@@ -265,7 +237,7 @@ def open_material_popup(item):
     detail = make_detail_table_data(item)
     meta = detail["meta"]
 
-    root = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(10))
+    root = BoxLayout(orientation="vertical", spacing=dp(12), padding=dp(14))
 
     title_row = BoxLayout(size_hint_y=None, height=dp(38), spacing=dp(8))
     title_row.add_widget(Label(
@@ -278,7 +250,7 @@ def open_material_popup(item):
     ))
     root.add_widget(title_row)
 
-    info = BoxLayout(orientation="vertical", size_hint_y=None, height=dp(118))
+    info = BoxLayout(orientation="vertical", size_hint_y=None, height=dp(196))
     info_rows = [
         ("Наименование материальных ценностей", meta["name"]),
         ("Единица измерения", meta["unit"]),
@@ -286,23 +258,20 @@ def open_material_popup(item):
         ("Категория", meta["category"]),
     ]
     for label, value in info_rows:
-        row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(28))
-        add_table_cell(row, label, 320, 28, align="center")
-        add_table_cell(row, value, 520, 28, align="center")
+        row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(46))
+        add_table_cell(row, label, 340, 46, align="center")
+        add_table_cell(row, value, 620, 46, align="center")
         info.add_widget(row)
     root.add_widget(info)
 
-    scroller = ScrollView(do_scroll_x=True, do_scroll_y=True, bar_width=dp(8))
-    table_box = BoxLayout(
-        orientation="vertical",
-        size_hint=(None, None),
-        width=dp(1800),
-        height=dp(1),
-    )
-    table_box.bind(minimum_height=table_box.setter("height"))
-    render_form_table(table_box, detail)
-    scroller.add_widget(table_box)
-    root.add_widget(scroller)
+    root.add_widget(Label(
+        text="История движения и остатки пока не приходят из API. Откройте позицию на сайте для полной книги.",
+        color=(0.75, 0.75, 0.75, 1),
+        font_size="15sp",
+        halign="center",
+        valign="middle",
+        text_size=(dp(900), dp(80)),
+    ))
 
     footer = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
     site_href = get_row_href(item, "name")
