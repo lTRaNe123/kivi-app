@@ -21,6 +21,8 @@ from kivy.properties import (
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
+from kivy.uix.popup import Popup
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.widget import Widget
 
@@ -193,9 +195,169 @@ def get_cell_value(row_data, key):
     return cell, ""
 
 
+def get_row_text(row_data, key):
+    value, _href = get_cell_value(row_data, key)
+    return str(value or "")
+
+
+def get_row_href(row_data, key):
+    _value, href = get_cell_value(row_data, key)
+    return str(href or "")
+
+
+def make_site_list_button(text):
+    return Button(
+        text=str(text or ""),
+        size_hint_y=None,
+        height=dp(52),
+        background_normal="",
+        background_color=(0.86, 0.86, 0.86, 1),
+        color=(0.25, 0.25, 0.25, 1),
+        font_size="15sp",
+    )
+
+
+def make_detail_table_data(item):
+    name = get_row_text(item, "name")
+    unit = get_row_text(item, "unit")
+    price = get_row_text(item, "price")
+    category = get_row_text(item, "category")
+
+    columns = [
+        ("date", "Дата записи", 110, "center"),
+        ("doc_name", "Наименование документа", 190, "center"),
+        ("doc_num", "№ документа", 100, "center"),
+        ("doc_date", "Дата документа", 120, "center"),
+        ("supplier", "Поставщик(получатель)", 200, "center"),
+        ("in", "Прибыло", 80, "center"),
+        ("out", "Убыло", 70, "center"),
+        ("total", "Всего", 70, "center"),
+        ("cat1", "I", 55, "center"),
+        ("cat2", "II", 55, "center"),
+        ("cat3", "III", 55, "center"),
+        ("cat4", "IV", 55, "center"),
+        ("cat5", "V", 55, "center"),
+        ("unit1", "I ЗРДН", 85, "center"),
+        ("unit2", "II ЗРДН", 85, "center"),
+        ("unit3", "III ЗРДН", 85, "center"),
+        ("kp", "КП", 70, "center"),
+    ]
+
+    rows = [
+        {"date": "", "doc_name": "Нет данных движения от сервера", "height": 42},
+    ]
+
+    return {
+        "table": {
+            "columns": columns,
+            "rows": rows,
+        },
+        "meta": {
+            "name": name,
+            "unit": unit,
+            "price": price,
+            "category": category,
+        },
+    }
+
+
+def open_material_popup(item):
+    detail = make_detail_table_data(item)
+    meta = detail["meta"]
+
+    root = BoxLayout(orientation="vertical", spacing=dp(8), padding=dp(10))
+
+    title_row = BoxLayout(size_hint_y=None, height=dp(38), spacing=dp(8))
+    title_row.add_widget(Label(
+        text="Информация",
+        color=(0.25, 0.25, 0.25, 1),
+        halign="left",
+        valign="middle",
+        text_size=(dp(760), dp(38)),
+        font_size="20sp",
+    ))
+    root.add_widget(title_row)
+
+    info = BoxLayout(orientation="vertical", size_hint_y=None, height=dp(118))
+    info_rows = [
+        ("Наименование материальных ценностей", meta["name"]),
+        ("Единица измерения", meta["unit"]),
+        ("Цена за единицу", meta["price"]),
+        ("Категория", meta["category"]),
+    ]
+    for label, value in info_rows:
+        row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(28))
+        add_table_cell(row, label, 320, 28, align="center")
+        add_table_cell(row, value, 520, 28, align="center")
+        info.add_widget(row)
+    root.add_widget(info)
+
+    scroller = ScrollView(do_scroll_x=True, do_scroll_y=True, bar_width=dp(8))
+    table_box = BoxLayout(
+        orientation="vertical",
+        size_hint=(None, None),
+        width=dp(1800),
+        height=dp(1),
+    )
+    table_box.bind(minimum_height=table_box.setter("height"))
+    render_form_table(table_box, detail)
+    scroller.add_widget(table_box)
+    root.add_widget(scroller)
+
+    footer = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
+    site_href = get_row_href(item, "name")
+    btn_site = Button(text="Открыть на сайте", disabled=not bool(site_href))
+    btn_close = Button(text="Закрыть")
+    footer.add_widget(btn_site)
+    footer.add_widget(btn_close)
+    root.add_widget(footer)
+
+    popup = Popup(
+        title="",
+        content=root,
+        size_hint=(0.92, 0.9),
+        auto_dismiss=True,
+    )
+
+    if site_href:
+        btn_site.bind(on_release=lambda *_args: webbrowser.open(site_href))
+    btn_close.bind(on_release=lambda *_args: popup.dismiss())
+    popup.open()
+
+
+def render_form_catalog(container, data) -> None:
+    container.clear_widgets()
+    container.spacing = dp(12)
+    container.padding = [dp(36), dp(10), dp(36), dp(10)]
+    container.width = dp(1100)
+    table = data.get("table") if isinstance(data, dict) else None
+    lines = []
+    if isinstance(data, dict):
+        lines = data.get("lines") or data.get("rows") or []
+    rows = normalize_rows(table, lines)
+
+    if not rows:
+        status = make_site_list_button("Нет данных для отображения")
+        status.disabled = True
+        container.add_widget(status)
+        return
+
+    for row_data in rows:
+        name = get_row_text(row_data, "name")
+        if not name:
+            continue
+        btn = make_site_list_button(name)
+        btn.width = dp(980)
+        btn.size_hint_x = None
+        btn.bind(on_release=lambda _btn, item=row_data: open_material_popup(item))
+        container.add_widget(btn)
+
+
 def render_form_table(container, data) -> None:
     """Рисует форму как визуальную таблицу, а не как консольный текст."""
     container.clear_widgets()
+    container.spacing = 0
+    container.padding = [0, 0, 0, 0]
 
     table = data.get("table") if isinstance(data, dict) else None
     lines = []
@@ -845,7 +1007,10 @@ class FormViewScreen(Screen):
 
             def ui_ok(dt, data=data):
                 self.header_text = data.get("header") or ""
-                render_form_table(self.ids.lines_table, data)
+                if self._code in ("f10", "book10"):
+                    render_form_catalog(self.ids.lines_table, data)
+                else:
+                    render_form_table(self.ids.lines_table, data)
 
                 self.error_text = ""
 
