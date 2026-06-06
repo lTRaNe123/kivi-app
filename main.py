@@ -3,6 +3,7 @@ import threading
 import re
 import webbrowser
 from collections import defaultdict
+from urllib.parse import quote
 
 from kivy.app import App
 from kivy.clock import Clock
@@ -87,12 +88,21 @@ def parse_form_lines(lines):
         if len(parts) > 3:
             category = parts[3].replace("категория:", "").strip()
 
+        search_href = f"{api_client.cfg.base_url}/?search={quote(name)}" if name else ""
+        category_href = f"{api_client.cfg.base_url}/?category={quote(category)}" if category else ""
+
         rows.append({
             "number": number,
-            "name": name,
+            "name": {
+                "text": name,
+                "href": search_href,
+            },
             "unit": unit,
             "price": price,
-            "category": category,
+            "category": {
+                "text": category,
+                "href": category_href,
+            },
         })
 
     return rows
