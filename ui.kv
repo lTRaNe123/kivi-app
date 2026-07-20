@@ -1693,6 +1693,42 @@
             height: dp(52)
 
         Label:
+            text: root.pricing_label
+            color: 0.78, 0.90, 0.82, 1
+            bold: True
+            font_size: "13sp"
+            halign: "center"
+            valign: "middle"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(26)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(42)
+            spacing: dp(8)
+
+            Button:
+                text: "Рубли"
+                background_normal: ""
+                background_down: ""
+                background_color: (0.20, 0.42, 0.78, 1) if root.payment_method == "RUB" else (0.08, 0.15, 0.27, 1)
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "13sp"
+                on_release: root.set_payment_method("RUB")
+
+            Button:
+                text: "СТ"
+                background_normal: ""
+                background_down: ""
+                background_color: (0.20, 0.42, 0.78, 1) if root.payment_method == "ST" else (0.08, 0.15, 0.27, 1)
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "13sp"
+                on_release: root.set_payment_method("ST")
+
+        Label:
             text: root.draft_status_text
             color: 0.78, 0.90, 0.82, 1
             font_size: "12sp"
@@ -1702,18 +1738,91 @@
             size_hint_y: None
             height: dp(42)
 
-        Button:
-            text: root.save_button_text
-            background_normal: ""
-            background_down: ""
-            background_color: (0.11, 0.30, 0.20, 1) if root.saved else (0.20, 0.42, 0.78, 1)
-            color: 1, 1, 1, 1
-            bold: True
-            font_size: "15sp"
+        BoxLayout:
             size_hint_y: None
             height: dp(50)
-            disabled: root.saving or root.saved
-            on_release: root.save_draft()
+            spacing: dp(8)
+
+            Button:
+                text: root.save_button_text
+                background_normal: ""
+                background_down: ""
+                background_color: (0.11, 0.30, 0.20, 1) if root.saved else (0.08, 0.15, 0.27, 1)
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "13sp"
+                disabled: root.saving or root.saved or root.checking_out
+                on_release: root.save_draft()
+
+            Button:
+                text: root.checkout_button_text
+                background_normal: ""
+                background_down: ""
+                background_color: 0.20, 0.42, 0.78, 1
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "13sp"
+                disabled: root.saving or root.checking_out
+                on_release: root.create_test_order()
+
+
+<ChevronAdminPricingScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(18), dp(22)
+        spacing: dp(10)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(44)
+
+            SecondaryButton:
+                text: "Назад"
+                size_hint_x: None
+                width: dp(92)
+                on_release: root.goto_employee()
+
+            Label:
+                text: "Настройка Военторга"
+                color: 0.04, 0.04, 0.04, 1
+                bold: True
+                font_size: "22sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+
+            SecondaryButton:
+                text: "Обновить"
+                size_hint_x: None
+                width: dp(104)
+                on_release: root.load_pricing()
+
+        ScrollView:
+            bar_width: dp(4)
+
+            BoxLayout:
+                id: pricing_box
+                orientation: "vertical"
+                spacing: dp(10)
+                size_hint_y: None
+                height: self.minimum_height
+
+        FinePrint:
+            text: "Загрузка..." if root.loading else root.status_text
+            color: 0.34, 0.34, 0.34, 1
+            size_hint_y: None
+            height: dp(34)
+
+        PrimaryButton:
+            text: "Сохранить"
+            disabled: root.loading or root.saving
+            on_release: root.save_pricing()
 
 
 <EmployeePanelScreen>:
@@ -1746,6 +1855,13 @@
             spacing: dp(10)
             size_hint_y: None
             height: self.minimum_height
+
+        PrimaryButton:
+            id: btn_admin_pricing
+            text: "Настройка Военторга"
+            disabled: True
+            opacity: 0
+            on_release: root.goto_admin_pricing()
 
         Widget:
 

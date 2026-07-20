@@ -25,6 +25,7 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
+from kivy.uix.spinner import Spinner
 from kivy.uix.textinput import TextInput
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 
@@ -1846,26 +1847,10 @@ class ChevronConfiguratorScreen(Screen):
             self.price_available = False
             self.price_text = "Стоимость пока не назначена"
             return
-        rub_total = 0.0
-        st_total = 0.0
-        for item in self.kit_detail.get("items") or []:
-            try:
-                rub_total += float(item.get("price_rub") or 0) * float(item.get("quantity") or 1)
-            except (TypeError, ValueError):
-                pass
-        selected_codes = self._selected_codes()
-        for group in self.kit_detail.get("option_groups") or []:
-            for option in group.get("options") or []:
-                if option.get("code") not in selected_codes:
-                    continue
-                try:
-                    rub_total += float(option.get("price_rub") or 0)
-                    st_total += float(option.get("price_st") or 0)
-                except (TypeError, ValueError):
-                    pass
-        self.preliminary_price_rub = rub_total
-        self.preliminary_price_st = st_total
-        self.price_text = f"Предварительно: {rub_total:.2f} ₽ / {st_total:.2f} ST"
+        rub = kit.get("base_price_rub")
+        st = kit.get("base_price_st")
+        label = kit.get("pricing_label") or ""
+        self.price_text = f"{label}: базовая цена {rub} ₽ / {st} ST"
 
     def validate_required(self):
         missing = []
@@ -2140,14 +2125,20 @@ class ChevronQuoteConfirmScreen(Screen):
     summary_text = StringProperty("")
     lines_text = StringProperty("")
     price_text = StringProperty("Стоимость пока не назначена")
+    pricing_label = StringProperty("")
     draft_status_text = StringProperty("")
     save_button_text = StringProperty("Сохранить черновик")
+    checkout_button_text = StringProperty("Оформить тестовый заказ")
+    payment_method = StringProperty("RUB")
     saving = BooleanProperty(False)
+    checking_out = BooleanProperty(False)
     saved = BooleanProperty(False)
     kit_code = StringProperty("")
     option_codes = ListProperty([])
     order_lines = ListProperty([])
     idempotency_key = StringProperty("")
+    checkout_idempotency_key = StringProperty("")
+    quote = ObjectProperty({})
 
     def set_quote(self, kit_title, kit_code, summary_text, option_codes, lines, quote_payload):
         quote = (quote_payload or {}).get("quote") or {}
@@ -2155,14 +2146,19 @@ class ChevronQuoteConfirmScreen(Screen):
         self.kit_code = kit_code
         self.option_codes = list(option_codes or [])
         self.order_lines = list(lines or [])
+        self.quote = quote
         self.summary_text = summary_text or ""
         self.lines_text = "\n".join(
-            f"{line.get('text_value')} × {line.get('quantity')}" for line in lines
+            self._line_price_text(line) for line in quote.get("lines") or lines
         )
         self.idempotency_key = uuid.uuid4().hex
+        self.checkout_idempotency_key = uuid.uuid4().hex
         self.saved = False
         self.saving = False
+        self.checking_out = False
         self.save_button_text = "Сохранить черновик"
+        self.checkout_button_text = "Оформить тестовый заказ"
+        self.pricing_label = quote.get("pricing_label") or ""
         self.draft_status_text = ""
         if quote.get("price_available"):
             rub = quote.get("total_price_rub")
@@ -2175,6 +2171,17 @@ class ChevronQuoteConfirmScreen(Screen):
             self.price_text = "Стоимость: " + " / ".join(parts)
         else:
             self.price_text = "Стоимость пока не назначена"
+
+    def _line_price_text(self, line):
+        base = f"{line.get('text_value')} × {line.get('quantity')}"
+        rub = line.get("line_total_rub")
+        st = line.get("line_total_st")
+        if rub is not None and st is not None:
+            return f"{base} — {rub} ₽ / {st} ST"
+        return base
+
+    def set_payment_method(self, method):
+        self.payment_method = method
 
     def goto_names(self):
         self.manager.current = "chevron_names_draft"
@@ -2217,9 +2224,291 @@ class ChevronQuoteConfirmScreen(Screen):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def create_test_order(self):
+        if self.checking_out:
+            return
+        if (self.quote or {}).get("pricing_mode") != "TEST":
+            self.draft_status_text = "Тестовое оформление доступно только в TEST режиме."
+            return
+        if not (self.quote or {}).get("price_available"):
+            self.draft_status_text = "Цены не назначены."
+            return
+        self.checking_out = True
+        self.checkout_button_text = "Оформляем..."
+        self.draft_status_text = ""
+
+        def worker():
+            try:
+                data = api_client.create_chevron_test_order(
+                    self.kit_code,
+                    list(self.option_codes),
+                    list(self.order_lines),
+                    self.checkout_idempotency_key,
+                    self.payment_method,
+                )
+            except Exception as exc:
+                msg = f"Не удалось оформить тестовый заказ: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.checking_out = False
+                    self.checkout_button_text = "Повторить оформление"
+                    self.draft_status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                order = data.get("order") or {}
+                number = order.get("order_number") or "без номера"
+                self.checking_out = False
+                self.checkout_button_text = "Тестовый заказ создан"
+                self.draft_status_text = f"Тестовый заказ создан. Средства не списаны. Номер: {number}"
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+
+class ChevronAdminPricingScreen(Screen):
+    status_text = StringProperty("")
+    loading = BooleanProperty(False)
+    saving = BooleanProperty(False)
+    pricing = ObjectProperty({})
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.kit_fields = {}
+        self.option_fields = {}
+        self.settings_fields = {}
+
+    def on_pre_enter(self, *args):
+        self.load_pricing()
+
+    def load_pricing(self):
+        self.loading = True
+        self.status_text = "Загружаем настройки..."
+        self.ids.pricing_box.clear_widgets()
+
+        def worker():
+            try:
+                data = api_client.get_chevron_admin_pricing()
+            except Exception as exc:
+                msg = f"Ошибка настроек: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                self.pricing = data.get("pricing") or {}
+                self._render()
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _render(self):
+        box = self.ids.pricing_box
+        box.clear_widgets()
+        self.kit_fields = {}
+        self.option_fields = {}
+        self.settings_fields = {}
+        pricing = self.pricing or {}
+        settings = pricing.get("settings") or {}
+
+        box.add_widget(make_inventory_label("Тестовые цены"))
+        box.add_widget(self._settings_card(settings))
+
+        box.add_widget(make_inventory_label("Цены комплектов"))
+        for kit in pricing.get("kits") or []:
+            box.add_widget(self._kit_card(kit))
+
+        box.add_widget(make_inventory_label("Цены опций"))
+        for group in pricing.get("option_groups") or []:
+            box.add_widget(make_inventory_label(group.get("title") or group.get("code") or "Группа"))
+            for option in group.get("options") or []:
+                box.add_widget(self._option_card(group, option))
+
+        missing = pricing.get("missing_fields") or []
+        self.status_text = (
+            "Настройки заполнены. Оформление включено."
+            if pricing.get("ordering_enabled")
+            else f"Оформление выключено. Не заполнено: {len(missing)}"
+        )
+
+    def _settings_card(self, settings):
+        card = self._card(dp(268))
+        card.add_widget(self._label("Режим и общие настройки", bold=True))
+        mode = Spinner(
+            text=settings.get("pricing_mode") or "TEST",
+            values=("TEST", "PRODUCTION"),
+            size_hint_y=None,
+            height=dp(44),
+        )
+        rate = self._input(settings.get("st_rate_rub"), "Курс 1 СТ в рублях")
+        instruction = self._input(settings.get("rub_payment_instruction"), "Инструкция оплаты рублями", multiline=True, height=dp(76))
+        ordering = Spinner(
+            text="Включено" if settings.get("ordering_enabled") else "Выключено",
+            values=("Выключено", "Включено"),
+            size_hint_y=None,
+            height=dp(44),
+        )
+        self.settings_fields = {
+            "pricing_mode": mode,
+            "st_rate_rub": rate,
+            "rub_payment_instruction": instruction,
+            "ordering_enabled": ordering,
+        }
+        card.add_widget(mode)
+        card.add_widget(rate)
+        card.add_widget(instruction)
+        card.add_widget(ordering)
+        return card
+
+    def _kit_card(self, kit):
+        card = self._card(dp(208))
+        card.add_widget(self._label(kit.get("title") or kit.get("code") or "Комплект", bold=True))
+        rub = self._input(kit.get("price_rub"), "Цена ₽")
+        st = self._input(kit.get("price_st"), "Цена СТ")
+        unit = Spinner(
+            text=kit.get("pricing_unit") or "PER_SET",
+            values=("PER_SET", "PER_LINE", "PER_ITEM"),
+            size_hint_y=None,
+            height=dp(44),
+        )
+        self.kit_fields[kit.get("code")] = {"price_rub": rub, "price_st": st, "pricing_unit": unit}
+        card.add_widget(rub)
+        card.add_widget(st)
+        card.add_widget(unit)
+        return card
+
+    def _option_card(self, group, option):
+        card = self._card(dp(154))
+        card.add_widget(self._label(option.get("title") or option.get("code") or "Опция", bold=True))
+        rub = self._input(option.get("price_rub"), "Доплата ₽")
+        st = self._input(option.get("price_st"), "Доплата СТ")
+        key = (group.get("code"), option.get("code"))
+        self.option_fields[key] = {"price_rub": rub, "price_st": st}
+        card.add_widget(rub)
+        card.add_widget(st)
+        return card
+
+    def _card(self, height):
+        card = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(8), size_hint_y=None, height=height)
+        with card.canvas.before:
+            Color(1, 1, 1, 1)
+            card._bg = RoundedRectangle(pos=card.pos, size=card.size, radius=[dp(8)])
+            Color(0.86, 0.86, 0.86, 1)
+            card._border = Line(rounded_rectangle=(card.x, card.y, card.width, card.height, dp(8)), width=1)
+
+        def sync(instance, *_):
+            instance._bg.pos = instance.pos
+            instance._bg.size = instance.size
+            instance._border.rounded_rectangle = (instance.x, instance.y, instance.width, instance.height, dp(8))
+
+        card.bind(pos=sync, size=sync)
+        return card
+
+    def _label(self, text, bold=False):
+        lbl = Label(
+            text=str(text),
+            bold=bold,
+            color=(0.05, 0.05, 0.05, 1),
+            font_size="15sp",
+            halign="left",
+            valign="middle",
+            size_hint_y=None,
+            height=dp(24),
+        )
+        lbl.bind(size=lambda inst, *_: setattr(inst, "text_size", inst.size))
+        return lbl
+
+    def _input(self, value, hint, multiline=False, height=None):
+        field = TextInput(
+            text="" if value is None else str(value),
+            hint_text=hint,
+            multiline=multiline,
+            size_hint_y=None,
+            height=height or dp(42),
+            font_size="14sp",
+            padding=(dp(10), dp(9)),
+        )
+        return field
+
+    def save_pricing(self):
+        if self.saving:
+            return
+        settings = {
+            "pricing_mode": self.settings_fields["pricing_mode"].text,
+            "st_rate_rub": self._nullable_text(self.settings_fields["st_rate_rub"]),
+            "rub_payment_instruction": self._nullable_text(self.settings_fields["rub_payment_instruction"]),
+            "ordering_enabled": self.settings_fields["ordering_enabled"].text == "Включено",
+        }
+        if settings["pricing_mode"] == "PRODUCTION":
+            settings["confirm_production"] = True
+        kit_prices = []
+        for kit_code, fields in self.kit_fields.items():
+            kit_prices.append({
+                "kit_code": kit_code,
+                "price_rub": self._nullable_text(fields["price_rub"]),
+                "price_st": self._nullable_text(fields["price_st"]),
+                "pricing_unit": fields["pricing_unit"].text,
+            })
+        options = []
+        for (group_code, option_code), fields in self.option_fields.items():
+            options.append({
+                "group_code": group_code,
+                "code": option_code,
+                "price_rub": self._nullable_text(fields["price_rub"]),
+                "price_st": self._nullable_text(fields["price_st"]),
+            })
+
+        self.saving = True
+        self.status_text = "Сохраняем..."
+
+        def worker():
+            try:
+                data = api_client.update_chevron_admin_pricing(settings, kit_prices, options)
+            except Exception as exc:
+                msg = f"Ошибка сохранения: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.saving = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.saving = False
+                self.pricing = data.get("pricing") or {}
+                self._render()
+                self.status_text = "Настройки сохранены."
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _nullable_text(self, field):
+        value = (field.text or "").strip()
+        return None if value == "" else value
+
+    def goto_employee(self):
+        self.manager.current = "employee_panel"
+
 
 class EmployeePanelScreen(Screen):
     def on_pre_enter(self, *args):
+        app = App.get_running_app()
+        user = app.current_user or {}
+        is_admin = int(user.get("access") or 0) == 1
+        self.ids.btn_admin_pricing.disabled = not is_admin
+        self.ids.btn_admin_pricing.opacity = 1 if is_admin else 0
+        self.ids.btn_admin_pricing.height = dp(52) if is_admin else 0
         fill_cards(
             self.ids.employee_cards,
             [
@@ -2228,6 +2517,9 @@ class EmployeePanelScreen(Screen):
                 "Доставщик",
             ],
         )
+
+    def goto_admin_pricing(self):
+        self.manager.current = "chevron_admin_pricing"
 
     def goto_home(self):
         self.manager.current = "user_home"
@@ -2260,6 +2552,7 @@ class SixnerInventoryApp(App):
         sm.add_widget(ChevronConfiguratorScreen(name="chevron_configurator"))
         sm.add_widget(ChevronNamesDraftScreen(name="chevron_names_draft"))
         sm.add_widget(ChevronQuoteConfirmScreen(name="chevron_quote_confirm"))
+        sm.add_widget(ChevronAdminPricingScreen(name="chevron_admin_pricing"))
         sm.add_widget(EmployeePanelScreen(name="employee_panel"))
         sm.add_widget(TransferListScreen(name="transfers"))
         sm.add_widget(TransferCreateScreen(name="transfer_create"))

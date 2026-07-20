@@ -41,6 +41,8 @@ class ApiClient:
       /api/chevron_order_create.php
       /api/chevron_orders.php
       /api/chevron_order_detail.php
+      /api/chevron_admin_pricing_get.php
+      /api/chevron_admin_pricing_update.php
     """
 
     def __init__(self, base_url: str):
@@ -452,6 +454,37 @@ class ApiClient:
             raise ApiError("API заказа не вернул order")
         return payload
 
+    def create_chevron_test_order(
+        self,
+        kit_code: str,
+        option_codes: List[str],
+        lines: List[Dict[str, Any]],
+        idempotency_key: str,
+        payment_method: str,
+    ) -> Dict[str, Any]:
+        """
+        POST /api/chevron_order_create.php
+        Создаёт тестовый заказ без реального списания средств.
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json(
+            "POST",
+            "chevron_order_create.php",
+            data={
+                "kit_code": kit_code,
+                "option_codes": json.dumps(option_codes, ensure_ascii=False),
+                "lines": json.dumps(lines, ensure_ascii=False),
+                "status": "TEST_ORDER",
+                "payment_method": payment_method,
+                "idempotency_key": idempotency_key,
+            },
+        )
+        if not isinstance(payload.get("order") or {}, dict):
+            raise ApiError("API заказа не вернул order")
+        return payload
+
     def get_chevron_orders(
         self,
         status: str = "",
@@ -489,6 +522,43 @@ class ApiClient:
         )
         if not isinstance(payload.get("order") or {}, dict):
             raise ApiError("API заказа не вернул order")
+        return payload
+
+    def get_chevron_admin_pricing(self) -> Dict[str, Any]:
+        """
+        GET /api/chevron_admin_pricing_get.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json("GET", "chevron_admin_pricing_get.php")
+        if not isinstance(payload.get("pricing") or {}, dict):
+            raise ApiError("API настроек цен не вернул pricing")
+        return payload
+
+    def update_chevron_admin_pricing(
+        self,
+        settings: Optional[Dict[str, Any]] = None,
+        kit_prices: Optional[List[Dict[str, Any]]] = None,
+        options: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """
+        POST /api/chevron_admin_pricing_update.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json(
+            "POST",
+            "chevron_admin_pricing_update.php",
+            data={
+                "settings": json.dumps(settings or {}, ensure_ascii=False),
+                "kit_prices": json.dumps(kit_prices or [], ensure_ascii=False),
+                "options": json.dumps(options or [], ensure_ascii=False),
+            },
+        )
+        if not isinstance(payload.get("pricing") or {}, dict):
+            raise ApiError("API настроек цен не вернул pricing")
         return payload
 
 
