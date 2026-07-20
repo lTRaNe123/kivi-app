@@ -2,33 +2,14 @@
 #:import dp kivy.metrics.dp
 
 
-<TableCell>:
-    size_hint: None, None
-    color: 0.05, 0.38, 0.08, 1
-    font_size: "14sp"
-    valign: "middle"
-    text_size: self.width - dp(8), self.height - dp(6)
+<FinanceTableRow>:
     canvas.before:
         Color:
-            rgba: 1, 1, 1, 1
+            rgba: 0.98, 0.98, 0.98, 1
         Rectangle:
             pos: self.pos
             size: self.size
-    canvas.after:
-        Color:
-            rgba: 0.45, 0.45, 0.45, 1
-        Line:
-            rectangle: self.x, self.y, self.width, self.height
-            width: 1
-
-
-<TableSeparator>:
-    canvas.before:
-        Color:
-            rgba: 0, 0, 1, 1
-        Rectangle:
-            pos: self.pos
-            size: self.size
+    spacing: dp(1)
 
 
 <LoginScreen>:
@@ -74,7 +55,7 @@
     BoxLayout:
         orientation: "vertical"
         padding: dp(16)
-        spacing: dp(10)
+        spacing: dp(12)
 
         Label:
             id: lbl_user_name
@@ -89,36 +70,37 @@
             size_hint_y: None
             height: dp(60)
 
-        Label:
-            text: "Ожидает моего подтверждения:"
+        Button:
+            text: "Личный кабинет"
+            font_size: "18sp"
             size_hint_y: None
-            height: self.texture_size[1] + dp(6)
+            height: dp(64)
+            on_release: root.goto_finance()
 
-        ScrollView:
-            size_hint_y: 0.35
-            BoxLayout:
-                id: box_pending
-                orientation: "vertical"
-                size_hint_y: None
-                height: self.minimum_height
-
-        Label:
-            text: "Мой инвентарь:"
+        Button:
+            id: btn_voentorg
+            text: "Военторг"
+            font_size: "18sp"
             size_hint_y: None
-            height: self.texture_size[1] + dp(6)
+            height: 0 if self.disabled else dp(64)
+            opacity: 0 if self.disabled else 1
+            on_release: root.goto_voentorg()
 
-        ScrollView:
-            size_hint_y: 0.35
-            BoxLayout:
-                id: box_accepted
-                orientation: "vertical"
-                size_hint_y: None
-                height: self.minimum_height
+        Button:
+            id: btn_employee
+            text: "Панель сотрудника"
+            font_size: "18sp"
+            size_hint_y: None
+            height: 0 if self.disabled else dp(64)
+            opacity: 0 if self.disabled else 1
+            on_release: root.goto_employee_panel()
+
+        Widget:
 
         Label:
             text: root.status_text
             size_hint_y: None
-            height: dp(24)
+            height: dp(36)
 
         BoxLayout:
             size_hint_y: None
@@ -126,18 +108,139 @@
             spacing: dp(10)
 
             Button:
-                text: "Передачи имущества"
-                on_release: root.goto_transfers()
-
-            Button:
-                text: "Книги / формы"
-                on_release: root.goto_forms()
-
-            Button:
                 text: "Выйти"
                 on_release:
                     app.current_user = None
                     app.root.current = "login"
+
+
+<FinanceAccountScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(12)
+        spacing: dp(8)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(42)
+            spacing: dp(8)
+
+            Button:
+                text: "Назад"
+                size_hint_x: None
+                width: dp(96)
+                on_release: root.goto_home()
+
+            Button:
+                text: "Обновить"
+                size_hint_x: None
+                width: dp(116)
+                on_release: root.refresh()
+
+            Label:
+                text: root.balance_text
+                bold: True
+                halign: "right"
+                valign: "middle"
+                text_size: self.size
+
+        TextInput:
+            id: search_input
+            hint_text: "Поиск по операциям"
+            multiline: False
+            size_hint_y: None
+            height: dp(42)
+            on_text_validate: root.refresh()
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(42)
+            spacing: dp(8)
+
+            Spinner:
+                id: finance_receiver
+                text: "получатель"
+                values: ()
+                on_text: root.on_receiver_selected(self.text)
+
+            TextInput:
+                id: transfer_amount
+                hint_text: "ST"
+                input_filter: "float"
+                multiline: False
+                size_hint_x: None
+                width: dp(82)
+
+            Button:
+                text: "Перевести"
+                size_hint_x: None
+                width: dp(112)
+                on_release: root.send_transfer()
+
+        TextInput:
+            id: transfer_comment
+            hint_text: "Комментарий к переводу"
+            multiline: False
+            size_hint_y: None
+            height: dp(38)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(42)
+            spacing: dp(8)
+
+            TextInput:
+                id: withdraw_amount
+                hint_text: "Сумма вывода ST"
+                input_filter: "float"
+                multiline: False
+
+            Button:
+                text: "Вывести"
+                size_hint_x: None
+                width: dp(112)
+                on_release: root.send_withdraw()
+
+        TextInput:
+            id: withdraw_comment
+            hint_text: "Куда вывести / реквизиты / комментарий"
+            multiline: False
+            size_hint_y: None
+            height: dp(38)
+
+        ScrollView:
+            do_scroll_x: True
+            do_scroll_y: False
+            size_hint_y: None
+            height: dp(46)
+            bar_width: dp(6)
+
+            BoxLayout:
+                id: finance_header
+                orientation: "horizontal"
+                size_hint_x: None
+                height: dp(46)
+
+        RecycleView:
+            id: finance_table
+            viewclass: "FinanceTableRow"
+            do_scroll_x: True
+            do_scroll_y: True
+            scroll_type: ["bars", "content"]
+            bar_width: dp(6)
+
+            RecycleBoxLayout:
+                default_size: root.table_width, dp(52)
+                default_size_hint: None, None
+                size_hint: None, None
+                width: root.table_width
+                height: self.minimum_height
+                orientation: "vertical"
+
+        Label:
+            text: root.status_text
+            size_hint_y: None
+            height: dp(28)
 
 
 <TransferListScreen>:
@@ -365,7 +468,7 @@
             text: root.title_text
             font_size: "18sp"
             size_hint_y: None
-            height: dp(32)
+            height: self.texture_size[1] + dp(6)
             halign: "center"
             valign: "middle"
             text_size: self.size
@@ -374,28 +477,24 @@
             text: root.header_text
             font_size: "16sp"
             size_hint_y: None
-            height: dp(28)
+            height: self.texture_size[1] + dp(6)
             halign: "center"
             valign: "middle"
             text_size: self.size
 
         ScrollView:
-            do_scroll_x: True
-            do_scroll_y: True
-            bar_width: dp(8)
-            canvas.before:
-                Color:
-                    rgba: 1, 1, 1, 1
-                Rectangle:
-                    pos: self.pos
-                    size: self.size
+            do_scroll_x: False
+            bar_width: dp(6)
 
-            BoxLayout:
-                id: lines_table
-                orientation: "vertical"
-                size_hint: None, None
-                width: self.minimum_width
+            GridLayout:
+                id: lines_grid
+                cols: 1
+                size_hint_y: None
                 height: self.minimum_height
+                padding: dp(2), dp(4)
+                row_default_height: dp(32)
+                row_force_default: False
+                spacing: dp(6)
 
         Label:
             text: root.error_text

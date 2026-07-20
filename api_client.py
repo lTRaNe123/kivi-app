@@ -1,5 +1,6 @@
 # api_client.py
 import json
+import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Optional
 
@@ -30,6 +31,9 @@ class ApiClient:
       /api/transfer_create.php
       /api/users.php
       /api/form_view.php
+      /api/finance_profile.php
+      /api/finance_transfer.php
+      /api/finance_withdraw.php
     """
 
     def __init__(self, base_url: str):
@@ -37,6 +41,7 @@ class ApiClient:
         self.cfg = ApiConfig(base_url=base_url.rstrip("/"))
         self.session = requests.Session()
         self.user_id: Optional[int] = None
+        self.api_token: Optional[str] = None
 
     # ----- служебные методы -----
 
@@ -60,12 +65,24 @@ class ApiClient:
         Если success=false или формат неправильный — бросаем ApiError.
         """
         url = self._url(script)
+        headers = {}
+        if self.api_token:
+            headers["Authorization"] = f"Bearer {self.api_token}"
         try:
             if method.upper() == "GET":
-                resp = self.session.get(url, params=params, timeout=self.cfg.timeout)
+                resp = self.session.get(
+                    url,
+                    params=params,
+                    headers=headers,
+                    timeout=self.cfg.timeout,
+                )
             else:
                 resp = self.session.post(
-                    url, params=params, data=data, timeout=self.cfg.timeout
+                    url,
+                    params=params,
+                    data=data,
+                    headers=headers,
+                    timeout=self.cfg.timeout,
                 )
         except requests.RequestException as e:
             raise ApiError(f"Сетевая ошибка: {e}") from e
@@ -107,6 +124,10 @@ class ApiClient:
             "password": password,
         }
         payload = self._request_json("POST", "login.php", data=data)
+        token = payload.get("token")
+        if not token:
+            raise ApiError("Успешный вход, но сервер не вернул токен авторизации")
+        self.api_token = str(token)
 
         user = payload.get("user")
         if not user or not isinstance(user, dict):
@@ -130,13 +151,12 @@ class ApiClient:
 
     def get_assignments(self) -> List[Dict[str, Any]]:
         """
-        GET /api/book_get_assignments.php?user_id=...
+        GET /api/book_get_assignments.php
         """
         if not self.user_id:
             raise ApiError("Пользователь не авторизован")
 
-        params = {"user_id": self.user_id}
-        payload = self._request_json("GET", "book_get_assignments.php", params=params)
+        payload = self._request_json("GET", "book_get_assignments.php")
 
         assignments = (
             payload.get("assignments")
@@ -149,15 +169,14 @@ class ApiClient:
 
     def get_transfer_lists(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
-        GET /api/transfer_list.php?user_id=...
+        GET /api/transfer_list.php
         Ожидается:
         { "success": true, "incoming": [...], "outgoing": [...] }
         """
         if not self.user_id:
             raise ApiError("Пользователь не авторизован")
 
-        params = {"user_id": self.user_id}
-        payload = self._request_json("GET", "transfer_list.php", params=params)
+        payload = self._request_json("GET", "transfer_list.php")
 
         incoming = payload.get("incoming") or []
         outgoing = payload.get("outgoing") or []
@@ -224,19 +243,85 @@ class ApiClient:
             raise ApiError("Некорректный формат списка пользователей")
         return users
 
+    def get_finance_profile(
+        self,
+        query: str = "",
+        page: int = 1,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        """
+        GET /api/finance_profile.php
+
+        Возвращает профиль, баланс и структурированную таблицу:
+        { profile, table: { columns, rows, links, actions, pagination } }
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        params = {
+            "page": page,
+            "limit": limit,
+        }
+        if query:
+            params["q"] = query
+
+        payload = self._request_json("GET", "finance_profile.php", params=params)
+        table = payload.get("table") or {}
+        if not isinstance(table.get("columns") or [], list):
+            raise ApiError("API ЛК не вернул columns")
+        if not isinstance(table.get("rows") or [], list):
+            raise ApiError("API ЛК не вернул rows")
+        return payload
+
+    def create_finance_transfer(
+        self,
+        to_uid: int,
+        amount: float,
+        comment: str = "",
+    ) -> Dict[str, Any]:
+        """
+        POST /api/finance_transfer.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        data = {
+            "to_uid": to_uid,
+            "amount": amount,
+            "comment": comment,
+            "idempotency_key": uuid.uuid4().hex,
+        }
+        return self._request_json("POST", "finance_transfer.php", data=data)
+
+    def create_finance_withdraw(
+        self,
+        amount: float,
+        comment: str = "",
+    ) -> Dict[str, Any]:
+        """
+        POST /api/finance_withdraw.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        data = {
+            "amount": amount,
+            "details": comment,
+            "idempotency_key": uuid.uuid4().hex,
+        }
+        return self._request_json("POST", "finance_withdraw.php", data=data)
+
     def get_form(self, code: str) -> Dict[str, Any]:
         """
-        GET /api/form_view.php?code=...&user_id=...
+        GET /api/form_view.php?code=...
 
-        Раньше мы передавали только code, поэтому сервер отвечал "Not authorized".
-        Теперь добавляем user_id, как и в book_get_assignments.php / transfer_list.php.
+        Авторизация идёт через bearer-токен, а не через user_id.
         """
         if not self.user_id:
             raise ApiError("Пользователь не авторизован")
 
         params = {
             "code": code,
-            "user_id": self.user_id,  # <-- ключевой момент
         }
         payload = self._request_json("GET", "form_view.php", params=params)
         if not isinstance(payload, dict):

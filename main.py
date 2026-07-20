@@ -1,11 +1,9 @@
 # main.py
 import threading
-import re
-import webbrowser
 from collections import defaultdict
-from urllib.parse import quote
 
 from kivy.app import App
+from kivy.clock import Clock
 from kivy.clock import Clock
 
 Clock.max_iteration = 1000
@@ -18,14 +16,13 @@ from kivy.properties import (
     ListProperty,
     NumericProperty,
 )
+from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
-from kivy.uix.scrollview import ScrollView
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
-from kivy.uix.widget import Widget
-from kivy.graphics import Color, Rectangle
+from kivy.uix.recycleview.views import RecycleDataViewBehavior
 
 from api_client import api_client, ApiError
 
@@ -58,484 +55,53 @@ def make_inventory_label(text: str) -> Label:
     return lbl
 
 
-def parse_form_lines(lines):
-    """
-    Разбирает строки формы в табличные записи.
-
-    Бэкенд сейчас отдаёт строки вида:
-    "1. Название | Шт. | 100 руб. | категория: II"
-    """
-    rows = []
-    for idx, raw_line in enumerate(lines, start=1):
-        raw = str(raw_line).strip()
-        parts = [part.strip() for part in raw.split("|")]
-
-        number = str(idx)
-        name = raw
-        unit = ""
-        price = ""
-        category = ""
-
-        if parts:
-            match = re.match(r"^(\d+)[\.\)]?\s*(.*)$", parts[0])
-            if match:
-                number = match.group(1)
-                name = match.group(2).strip()
-            else:
-                name = parts[0]
-
-        if len(parts) > 1:
-            unit = parts[1]
-        if len(parts) > 2:
-            price = parts[2]
-        if len(parts) > 3:
-            category = parts[3].replace("категория:", "").strip()
-
-        search_href = f"{api_client.cfg.base_url}/?search={quote(name)}" if name else ""
-        category_href = f"{api_client.cfg.base_url}/?category={quote(category)}" if category else ""
-
-        rows.append({
-            "number": number,
-            "name": {
-                "text": name,
-                "href": search_href,
-            },
-            "unit": unit,
-            "price": price,
-            "category": {
-                "text": category,
-                "href": category_href,
-            },
-        })
-
-    return rows
-
-
-def escape_markup(value) -> str:
-    return (
-        str(value or "")
-        .replace("&", "&amp;")
-        .replace("[", "&bl;")
-        .replace("]", "&br;")
-    )
-
-
-class TableCell(Label):
-    href = StringProperty("")
-
-    def on_touch_up(self, touch):
-        if self.href and self.collide_point(*touch.pos):
-            webbrowser.open(self.href)
-            return True
-        return super().on_touch_up(touch)
-
-
-class TableSeparator(Widget):
-    pass
-
-
-def add_table_cell(row, text, width, height=38, bold=False, align="center", href=""):
-    display = escape_markup(text)
-    if href:
-        display = f"[u][color=0645AD]{display}[/color][/u]"
-
-    row.add_widget(TableCell(
-        text=display,
+def make_table_label(text: str, width: int) -> Label:
+    lbl = Label(
+        text=str(text),
+        size_hint=(None, None),
         width=dp(width),
-        height=dp(height),
-        bold=bold,
-        halign=align,
-        markup=True,
-        href=str(href or ""),
-    ))
-
-
-def normalize_columns(table, fallback_rows):
-    columns = table.get("columns") if isinstance(table, dict) else None
-    if isinstance(columns, list) and columns:
-        out = []
-        for col in columns:
-            if isinstance(col, dict):
-                key = str(col.get("key") or col.get("id") or col.get("title") or "")
-                title = str(col.get("title") or col.get("label") or key)
-                width = int(col.get("width") or 130)
-                align = str(col.get("align") or "center")
-                if key:
-                    out.append((key, title, width, align))
-        if out:
-            return out
-
-    return [
-        ("number", "№", 60, "center"),
-        ("name", "Наименование", 520, "left"),
-        ("unit", "Ед.", 110, "center"),
-        ("price", "Цена", 140, "center"),
-        ("category", "Категория", 150, "center"),
-    ]
-
-
-def normalize_rows(table, lines):
-    rows = table.get("rows") if isinstance(table, dict) else None
-    if isinstance(rows, list):
-        return rows
-    return parse_form_lines(lines)
-
-
-def get_cell_value(row_data, key):
-    if isinstance(row_data, dict):
-        cells = row_data.get("cells")
-        if isinstance(cells, dict) and key in cells:
-            cell = cells[key]
-        else:
-            cell = row_data.get(key, "")
-    else:
-        cell = ""
-
-    if isinstance(cell, dict):
-        return cell.get("text") or cell.get("value") or "", cell.get("href") or cell.get("url") or ""
-    return cell, ""
-
-
-def get_row_text(row_data, key):
-    value, _href = get_cell_value(row_data, key)
-    return str(value or "")
-
-
-def get_row_href(row_data, key):
-    _value, href = get_cell_value(row_data, key)
-    return str(href or "")
-
-
-def normalize_material_name(value):
-    return re.sub(r"\s+", " ", str(value or "").strip()).lower()
-
-
-def build_material_movements(assignments):
-    movements = defaultdict(list)
-
-    for doc in assignments or []:
-        doc_name = doc.get("name") or ""
-        doc_num = doc.get("num") or ""
-        doc_date = doc.get("date_nak") or ""
-        status = doc.get("status") or ""
-
-        for item in doc.get("items") or []:
-            name = item.get("name") or ""
-            key = normalize_material_name(name)
-            if not key:
-                continue
-
-            qty = item.get("qty") or ""
-            unit = item.get("unit") or ""
-            movements[key].append({
-                "date": doc_date,
-                "doc_name": doc_name,
-                "doc_num": doc_num,
-                "doc_date": doc_date,
-                "supplier": status,
-                "in": qty,
-                "out": "",
-                "total": qty,
-                "unit": unit,
-            })
-
-    return movements
-
-
-def attach_material_details(data, assignments):
-    table = data.get("table") if isinstance(data, dict) else None
-    lines = []
-    if isinstance(data, dict):
-        lines = data.get("lines") or data.get("rows") or []
-    rows = normalize_rows(table, lines)
-    movements = build_material_movements(assignments)
-
-    for row in rows:
-        name = get_row_text(row, "name")
-        key = normalize_material_name(name)
-        item_movements = movements.get(key) or []
-        row["detail"] = build_material_detail_table(row, item_movements)
-
-    data["table"] = {
-        "columns": normalize_columns(table if isinstance(table, dict) else {}, rows),
-        "rows": rows,
-    }
-    return data
-
-
-def build_material_detail_table(item, movements):
-    columns = [
-        ("date", "Дата записи", 105, "center"),
-        ("doc_name", "Наименование документа", 185, "center"),
-        ("doc_num", "№ документа", 95, "center"),
-        ("doc_date", "Дата документа", 120, "center"),
-        ("supplier", "Поставщик(получатель)", 190, "center"),
-        ("in", "Прибыло", 75, "center"),
-        ("out", "Убыло", 70, "center"),
-        ("total", "Всего", 70, "center"),
-        ("cat1", "I", 48, "center"),
-        ("cat2", "II", 48, "center"),
-        ("cat3", "III", 48, "center"),
-        ("cat4", "IV", 48, "center"),
-        ("cat5", "V", 48, "center"),
-        ("zrdn1", "I ЗРДН", 85, "center"),
-        ("zrdn2", "II ЗРДН", 85, "center"),
-        ("zrdn3", "III ЗРДН", 85, "center"),
-        ("kp", "КП", 70, "center"),
-        ("cell18", "18", 44, "center"),
-        ("cell19", "19", 44, "center"),
-        ("cell20", "20", 44, "center"),
-        ("cell21", "21", 44, "center"),
-        ("cell22", "22", 44, "center"),
-        ("cell23", "23", 44, "center"),
-        ("cell24", "24", 44, "center"),
-        ("cell25", "25", 44, "center"),
-        ("cell26", "26", 44, "center"),
-        ("cell27", "27", 44, "center"),
-        ("cell28", "28", 44, "center"),
-    ]
-
-    rows = []
-    balance = 0.0
-    for movement in movements:
-        row = dict(movement)
-        try:
-            balance += float(str(row.get("in") or 0).replace(",", "."))
-        except ValueError:
-            pass
-        row["total"] = int(balance) if balance.is_integer() else balance
-        rows.append(row)
-
-    if not rows:
-        rows.append({
-            "date": "",
-            "doc_name": "[данных движения нет в API]",
-            "doc_num": "",
-            "doc_date": "",
-            "supplier": "",
-            "in": "",
-            "out": "",
-            "total": "",
-            "height": 42,
-        })
-
-    while len(rows) < 10:
-        rows.append({"height": 42})
-
-    return {
-        "table": {
-            "columns": columns,
-            "rows": rows,
-        }
-    }
-
-
-def make_site_list_button(text):
-    return Button(
-        text=str(text or ""),
-        size_hint_y=None,
-        height=dp(52),
-        background_normal="",
-        background_color=(0.86, 0.86, 0.86, 1),
-        color=(0.25, 0.25, 0.25, 1),
-        font_size="15sp",
-    )
-
-
-def set_widget_background(widget, rgba):
-    with widget.canvas.before:
-        Color(*rgba)
-        rect = Rectangle(pos=widget.pos, size=widget.size)
-
-    def update_rect(instance, _value):
-        rect.pos = instance.pos
-        rect.size = instance.size
-
-    widget.bind(pos=update_rect, size=update_rect)
-
-
-def make_detail_table_data(item):
-    name = get_row_text(item, "name")
-    unit = get_row_text(item, "unit")
-    price = get_row_text(item, "price")
-    category = get_row_text(item, "category")
-
-    return {
-        "meta": {
-            "name": name,
-            "unit": unit,
-            "price": price,
-            "category": category,
-        },
-    }
-
-
-def open_material_popup(item):
-    meta = make_detail_table_data(item)["meta"]
-    detail = item.get("detail") if isinstance(item, dict) else None
-
-    root = BoxLayout(orientation="vertical", spacing=dp(12), padding=dp(14))
-    set_widget_background(root, (1, 1, 1, 1))
-
-    title_row = BoxLayout(size_hint_y=None, height=dp(38), spacing=dp(8))
-    title_row.add_widget(Label(
-        text="Информация",
-        color=(0.25, 0.25, 0.25, 1),
         halign="left",
-        valign="middle",
-        text_size=(dp(760), dp(38)),
-        font_size="20sp",
-    ))
-    root.add_widget(title_row)
-
-    info = BoxLayout(orientation="vertical", size_hint_y=None, height=dp(196))
-    info_rows = [
-        ("Наименование материальных ценностей", meta["name"]),
-        ("Единица измерения", meta["unit"]),
-        ("Цена за единицу", meta["price"]),
-        ("Категория", meta["category"]),
-    ]
-    for label, value in info_rows:
-        row = BoxLayout(orientation="horizontal", size_hint_y=None, height=dp(46))
-        add_table_cell(row, label, 340, 46, align="center")
-        add_table_cell(row, value, 620, 46, align="center")
-        info.add_widget(row)
-    root.add_widget(info)
-
-    detail_rows = []
-    if isinstance(detail, dict):
-        detail_table = detail.get("table") or {}
-        detail_rows = detail_table.get("rows") or []
-
-    scroller = ScrollView(do_scroll_x=True, do_scroll_y=True, bar_width=dp(8))
-    table_box = BoxLayout(
-        orientation="vertical",
-        size_hint=(None, None),
-        width=dp(1900),
-        height=dp(1),
+        valign="top",
+        padding=(dp(8), dp(6)),
     )
-    table_box.bind(minimum_height=table_box.setter("height"))
-    if detail:
-        render_form_table(table_box, detail)
-    scroller.add_widget(table_box)
-    root.add_widget(scroller)
-
-    footer = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
-    site_href = get_row_href(item, "name")
-    btn_site = Button(text="Открыть на сайте", disabled=not bool(site_href))
-    btn_close = Button(text="Закрыть")
-    footer.add_widget(btn_site)
-    footer.add_widget(btn_close)
-    root.add_widget(footer)
-
-    popup = Popup(
-        title="",
-        content=root,
-        size_hint=(0.97, 0.94),
-        auto_dismiss=True,
+    lbl.bind(
+        width=lambda inst, value: setattr(inst, "text_size", (value - dp(16), None)),
+        texture_size=lambda inst, size: setattr(inst, "height", max(dp(44), size[1] + dp(12))),
     )
-
-    if site_href:
-        btn_site.bind(on_release=lambda *_args: webbrowser.open(site_href))
-    btn_close.bind(on_release=lambda *_args: popup.dismiss())
-    popup.open()
+    return lbl
 
 
-def render_form_catalog(container, data) -> None:
-    container.clear_widgets()
-    container.spacing = dp(12)
-    container.padding = [dp(36), dp(10), dp(36), dp(10)]
-    container.width = dp(1100)
-    table = data.get("table") if isinstance(data, dict) else None
-    lines = []
-    if isinstance(data, dict):
-        lines = data.get("lines") or data.get("rows") or []
-    rows = normalize_rows(table, lines)
+class FinanceTableRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
+    cells = ListProperty([])
+    row_data = ObjectProperty({})
 
-    if not rows:
-        status = make_site_list_button("Нет данных для отображения")
-        status.disabled = True
-        container.add_widget(status)
-        return
+    def refresh_view_attrs(self, rv, index, data):
+        result = super().refresh_view_attrs(rv, index, data)
+        self.cells = data.get("cells") or []
+        self.row_data = data.get("row_data") or {}
+        self._rebuild()
+        return result
 
-    for row_data in rows:
-        name = get_row_text(row_data, "name")
-        if not name:
-            continue
-        btn = make_site_list_button(name)
-        btn.width = dp(980)
-        btn.size_hint_x = None
-        btn.bind(on_release=lambda _btn, item=row_data: open_material_popup(item))
-        container.add_widget(btn)
+    def _rebuild(self):
+        self.clear_widgets()
+        self.orientation = "horizontal"
+        self.size_hint = (None, None)
+        self.height = dp(48)
+        total_width = 0
+        max_height = dp(48)
+        for cell in self.cells:
+            width = int(cell.get("width") or 120)
+            lbl = make_table_label(cell.get("value", ""), width)
+            self.add_widget(lbl)
+            total_width += dp(width)
+            max_height = max(max_height, lbl.height)
+        self.width = total_width
+        self.height = max_height
 
-
-def render_form_table(container, data) -> None:
-    """Рисует форму как визуальную таблицу, а не как консольный текст."""
-    container.clear_widgets()
-    container.spacing = 0
-    container.padding = [0, 0, 0, 0]
-
-    table = data.get("table") if isinstance(data, dict) else None
-    lines = []
-    if isinstance(data, dict):
-        lines = data.get("lines") or data.get("rows") or []
-    rows = normalize_rows(table, lines)
-    if not rows:
-        status_row = BoxLayout(
-            orientation="horizontal",
-            size_hint=(None, None),
-            width=dp(720),
-            height=dp(42),
-        )
-        add_table_cell(status_row, "Нет данных для отображения", 720, 42)
-        container.add_widget(status_row)
-        return
-
-    columns = normalize_columns(table if isinstance(table, dict) else {}, rows)
-    total_width = sum(col[2] for col in columns)
-    container.width = dp(total_width)
-
-    header = BoxLayout(
-        orientation="horizontal",
-        size_hint=(None, None),
-        width=dp(total_width),
-        height=dp(54),
-    )
-    for _key, title, width, align in columns:
-        add_table_cell(header, title, width, 54, bold=True)
-    container.add_widget(header)
-
-    container.add_widget(TableSeparator(
-        size_hint=(None, None),
-        width=dp(total_width),
-        height=dp(5),
-    ))
-
-    for row_data in rows:
-        row_type = row_data.get("type") if isinstance(row_data, dict) else ""
-        if row_type == "separator":
-            container.add_widget(TableSeparator(
-                size_hint=(None, None),
-                width=dp(total_width),
-                height=dp(5),
-            ))
-            continue
-
-        row_height = int(row_data.get("height") or 42) if isinstance(row_data, dict) else 42
-        name_value, _href = get_cell_value(row_data, "name")
-        if len(str(name_value)) > 42:
-            row_height = max(row_height, 64)
-
-        row = BoxLayout(
-            orientation="horizontal",
-            size_hint=(None, None),
-            width=dp(total_width),
-            height=dp(row_height),
-        )
-        for key, _title, width, align in columns:
-            value, href = get_cell_value(row_data, key)
-            add_table_cell(row, value, width, row_height, align=align, href=href)
-        container.add_widget(row)
+    def on_release(self):
+        app = App.get_running_app()
+        screen = app.root.get_screen("finance_account")
+        screen.open_operation_detail(self.row_data)
 
 
 def build_inventory_from_docs(docs):
@@ -653,7 +219,18 @@ class UserHomeScreen(Screen):
 
         self.ids.lbl_user_info.text = "\n".join(info_lines) or "Информация о должности"
 
-        self.refresh_lists()
+        access = int(user.get("access") or 0)
+        access_shop = int(user.get("access_shop") or 0)
+        position_sec = str(user.get("position_sec") or "")
+
+        self.ids.btn_voentorg.disabled = access_shop != 1 and access != 1
+        self.ids.btn_employee.disabled = not self._can_use_employee_panel(access, position_sec)
+
+    def _can_use_employee_panel(self, access, position_sec):
+        if access == 1:
+            return True
+        roles = ["Вышивальщик", "Вырезальщик", "Комплектовальщик", "Доставщик"]
+        return any(role.lower() in position_sec.lower() for role in roles)
 
     def refresh_lists(self):
         box_pending = self.ids.box_pending
@@ -746,6 +323,233 @@ class UserHomeScreen(Screen):
 
     def goto_forms(self):
         self.manager.current = "forms_menu"
+
+    def goto_finance(self):
+        self.manager.current = "finance_account"
+
+    def goto_voentorg(self):
+        self.status_text = "Военторг будет подключён следующим этапом"
+
+    def goto_employee_panel(self):
+        self.status_text = "Панель сотрудника будет подключена после Военторга"
+
+
+# ---------- ЭКРАН: ЛИЧНЫЙ КАБИНЕТ ----------
+
+
+class FinanceAccountScreen(Screen):
+    status_text = StringProperty("")
+    balance_text = StringProperty("Баланс: -")
+    page = NumericProperty(1)
+    table_width = NumericProperty(dp(320))
+    users_labels = ListProperty([])
+    users_ids = ListProperty([])
+    selected_to_uid = NumericProperty(0)
+    current_columns = ListProperty([])
+    current_rows = ListProperty([])
+
+    def on_pre_enter(self, *args):
+        self.page = 1
+        self.refresh()
+        if not self.users_ids:
+            self.load_users()
+
+    def refresh(self):
+        query = (self.ids.search_input.text or "").strip()
+        self.status_text = "Загружаем Личный кабинет..."
+
+        def worker():
+            try:
+                data = api_client.get_finance_profile(query=query, page=int(self.page), limit=100)
+            except Exception as exc:
+                msg = f"Ошибка ЛК: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.fill_finance(data)
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def fill_finance(self, data):
+        profile = data.get("profile") or {}
+        table = data.get("table") or {}
+        columns = table.get("columns") or []
+        rows = table.get("rows") or []
+        pagination = table.get("pagination") or {}
+
+        balance = profile.get("balance")
+        currency = profile.get("currency") or "ST"
+        self.balance_text = f"Баланс: {balance} {currency}"
+        self.current_columns = columns
+        self.current_rows = rows
+
+        self._build_header(columns)
+        self._build_rows(columns, rows)
+
+        total = pagination.get("total", len(rows))
+        self.status_text = f"Операций: {total}"
+
+    def _build_header(self, columns):
+        header = self.ids.finance_header
+        header.clear_widgets()
+        total_width = 0
+        for col in columns:
+            width = int(col.get("width") or 120)
+            lbl = make_table_label(col.get("title") or col.get("key") or "", width)
+            lbl.bold = True
+            header.add_widget(lbl)
+            total_width += dp(width)
+        header.width = total_width
+
+    def _build_rows(self, columns, rows):
+        table = self.ids.finance_table
+        total_width = sum(dp(int(col.get("width") or 120)) for col in columns) or dp(320)
+        self.table_width = total_width
+        table.data = [
+            {
+                "cells": [
+                    {
+                        "value": row.get(col.get("key"), ""),
+                        "width": int(col.get("width") or 120),
+                    }
+                    for col in columns
+                ],
+                "row_data": row,
+            }
+            for row in rows
+        ]
+
+    def load_users(self):
+        def worker():
+            try:
+                users = api_client.get_users()
+            except Exception:
+                return
+
+            labels = []
+            ids = []
+            for u in users:
+                uid = int(u.get("uid"))
+                if uid == api_client.user_id:
+                    continue
+                username = u.get("username") or ""
+                name = u.get("name") or ""
+                otec = u.get("otec") or ""
+                labels.append(f"{uid}. {username} {name} {otec}".strip())
+                ids.append(uid)
+
+            def ui_ok(dt, labels=labels, ids=ids):
+                self.users_labels = labels
+                self.users_ids = ids
+                self.ids.finance_receiver.values = labels
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def on_receiver_selected(self, text):
+        if text in self.users_labels:
+            self.selected_to_uid = int(self.users_ids[self.users_labels.index(text)])
+        else:
+            self.selected_to_uid = 0
+
+    def send_transfer(self):
+        amount = self._amount_from_input(self.ids.transfer_amount.text)
+        comment = (self.ids.transfer_comment.text or "").strip()
+        to_uid = int(self.selected_to_uid or 0)
+
+        if to_uid <= 0:
+            self.status_text = "Выберите получателя"
+            return
+        if amount <= 0:
+            self.status_text = "Введите сумму перевода"
+            return
+
+        self.status_text = "Отправляем перевод..."
+
+        def worker():
+            try:
+                api_client.create_finance_transfer(to_uid, amount, comment)
+            except Exception as exc:
+                msg = f"Ошибка перевода: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt):
+                self.ids.transfer_amount.text = ""
+                self.ids.transfer_comment.text = ""
+                self.status_text = "Перевод выполнен"
+                self.refresh()
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def send_withdraw(self):
+        amount = self._amount_from_input(self.ids.withdraw_amount.text)
+        comment = (self.ids.withdraw_comment.text or "").strip()
+
+        if amount <= 0:
+            self.status_text = "Введите сумму вывода"
+            return
+
+        self.status_text = "Создаём заявку на вывод..."
+
+        def worker():
+            try:
+                api_client.create_finance_withdraw(amount, comment)
+            except Exception as exc:
+                msg = f"Ошибка вывода: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt):
+                self.ids.withdraw_amount.text = ""
+                self.ids.withdraw_comment.text = ""
+                self.status_text = "Заявка на вывод создана"
+                self.refresh()
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _amount_from_input(self, text):
+        try:
+            return float((text or "").replace(",", "."))
+        except ValueError:
+            return 0.0
+
+    def open_operation_detail(self, row):
+        lines = []
+        for col in self.current_columns:
+            key = col.get("key")
+            title = col.get("title") or key
+            lines.append(f"{title}: {row.get(key, '')}")
+        content = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(8))
+        content.add_widget(make_inventory_label("\n".join(lines)))
+        btn = Button(text="Закрыть", size_hint_y=None, height=dp(44))
+        content.add_widget(btn)
+        popup = Popup(title="Операция", content=content, size_hint=(0.92, 0.72))
+        btn.bind(on_release=popup.dismiss)
+        popup.open()
+
+    def goto_home(self):
+        self.manager.current = "user_home"
 
 
 # ---------- ЭКРАН: СПИСОК ПЕРЕДАЧ ----------
@@ -1081,7 +885,8 @@ class FormViewScreen(Screen):
         self.title_text = title
         self.header_text = ""
         self.error_text = ""
-        self.ids.lines_table.clear_widgets()
+        # очищаем прошлые строки
+        self.ids.lines_grid.clear_widgets()
 
     def on_pre_enter(self, *args) -> None:
         """При заходе на экран подгружаем форму."""
@@ -1090,16 +895,8 @@ class FormViewScreen(Screen):
 
     def load_form(self) -> None:
         """Запрашиваем данные формы у API и заполняем таблицу."""
-        table = self.ids.lines_table
-        table.clear_widgets()
-        status_row = BoxLayout(
-            orientation="horizontal",
-            size_hint=(None, None),
-            width=dp(720),
-            height=dp(42),
-        )
-        add_table_cell(status_row, "Загружаем данные...", 720, 42)
-        table.add_widget(status_row)
+        grid = self.ids.lines_grid
+        grid.clear_widgets()
         self.error_text = ""
         self.header_text = ""
 
@@ -1107,20 +904,28 @@ class FormViewScreen(Screen):
             self.error_text = "Код формы не задан"
             return
 
+        # временная надпись, пока грузим
+        loading_lbl = Label(
+            text="Загружаем данные...",
+            size_hint_y=None,
+            height=dp(24),
+            halign="left",
+            valign="middle",
+        )
+        loading_lbl.bind(
+            size=lambda inst, *_: setattr(inst, "text_size", inst.size)
+        )
+        grid.add_widget(loading_lbl)
+
         def worker():
             try:
                 data = api_client.get_form(self._code)
-                if self._code in ("f10", "book10"):
-                    try:
-                        assignments = api_client.get_assignments()
-                    except Exception:
-                        assignments = []
-                    data = attach_material_details(data, assignments)
             except Exception as exc:
                 msg = f"Ошибка загрузки: {exc}"
 
                 def ui_fail(dt, msg=msg):
-                    self.ids.lines_table.clear_widgets()
+                    grid = self.ids.lines_grid
+                    grid.clear_widgets()
                     self.header_text = ""
                     self.error_text = msg
 
@@ -1128,11 +933,18 @@ class FormViewScreen(Screen):
                 return
 
             def ui_ok(dt, data=data):
+                grid = self.ids.lines_grid
+                grid.clear_widgets()
+
                 self.header_text = data.get("header") or ""
-                if self._code in ("f10", "book10"):
-                    render_form_catalog(self.ids.lines_table, data)
+                # поддержим и 'lines', и 'rows', если бэкенд вернёт так
+                lines = data.get("lines") or data.get("rows") or []
+
+                if not lines:
+                    grid.add_widget(make_inventory_label("Нет данных для отображения"))
                 else:
-                    render_form_table(self.ids.lines_table, data)
+                    for line in lines:
+                        grid.add_widget(make_inventory_label(str(line)))
 
                 self.error_text = ""
 
@@ -1159,6 +971,7 @@ class SixnerInventoryApp(App):
         sm = RootWidget(transition=FadeTransition())
         sm.add_widget(LoginScreen(name="login"))
         sm.add_widget(UserHomeScreen(name="user_home"))
+        sm.add_widget(FinanceAccountScreen(name="finance_account"))
         sm.add_widget(TransferListScreen(name="transfers"))
         sm.add_widget(TransferCreateScreen(name="transfer_create"))
         sm.add_widget(FormsMenuScreen(name="forms_menu"))
