@@ -239,6 +239,147 @@
         text_size: self.size
 
 
+<ChevronKitItemRow>:
+    orientation: "horizontal"
+    spacing: dp(12)
+    padding: dp(10)
+    size_hint_y: None
+    height: dp(106)
+    canvas.before:
+        Color:
+            rgba: 0.08, 0.15, 0.27, 1
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+        Color:
+            rgba: 0.42, 0.55, 0.72, 0.45
+        Line:
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
+            width: 1
+
+    FloatLayout:
+        size_hint_x: None
+        width: dp(78)
+
+        Label:
+            text: root.placeholder
+            color: 0.72, 0.80, 0.90, 1
+            bold: True
+            font_size: "10sp"
+            halign: "center"
+            valign: "middle"
+            text_size: self.size
+            pos_hint: {"center_x": 0.5, "center_y": 0.5}
+            size_hint: None, None
+            size: dp(72), dp(72)
+            canvas.before:
+                Color:
+                    rgba: 0.10, 0.20, 0.34, 1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [dp(8)]
+                Color:
+                    rgba: 0.50, 0.62, 0.78, 0.45
+                Line:
+                    rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
+                    width: 1
+
+        AsyncImage:
+            source: root.image_url
+            opacity: 1 if root.image_url else 0
+            allow_stretch: True
+            keep_ratio: True
+            pos_hint: {"center_x": 0.5, "center_y": 0.5}
+            size_hint: None, None
+            size: dp(72), dp(72)
+
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(6)
+
+        Label:
+            text: root.title
+            color: 1, 1, 1, 1
+            bold: True
+            font_size: "13sp"
+            halign: "left"
+            valign: "bottom"
+            text_size: self.size
+
+        Label:
+            text: root.meta
+            color: 0.70, 0.78, 0.88, 1
+            font_size: "12sp"
+            halign: "left"
+            valign: "top"
+            text_size: self.size
+
+
+<ChevronOptionRow>:
+    orientation: "horizontal"
+    spacing: dp(10)
+    padding: dp(10), dp(7)
+    size_hint_y: None
+    height: dp(58)
+    opacity: 0.48 if root.option_disabled and root.selection_type != "header" else 1
+    canvas.before:
+        Color:
+            rgba: (0.18, 0.37, 0.68, 1) if root.selected else ((0.04, 0.10, 0.20, 1) if root.selection_type == "header" else (0.07, 0.14, 0.25, 1))
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+        Color:
+            rgba: (0.50, 0.58, 0.32, 1) if root.selected else (0.42, 0.55, 0.72, 0.35)
+        Line:
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
+            width: 1
+
+    Label:
+        text: root.mark
+        color: 1, 1, 1, 1
+        bold: True
+        font_size: "17sp"
+        size_hint_x: None
+        width: dp(26)
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(2)
+
+        Label:
+            text: root.title
+            color: 1, 1, 1, 1
+            bold: True
+            font_size: "14sp" if root.selection_type != "header" else "15sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+
+        Label:
+            text: root.price_text
+            color: 0.68, 0.78, 0.90, 1
+            font_size: "11sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+
+    Label:
+        text: "выбрано" if root.selected else ""
+        color: 0.85, 0.89, 0.70, 1
+        font_size: "11sp"
+        size_hint_x: None
+        width: dp(64)
+        halign: "right"
+        valign: "middle"
+        text_size: self.size
+
+
 <LoginScreen>:
     login_input: login_input
     password_input: password_input
@@ -778,6 +919,209 @@
             color: 0.34, 0.34, 0.34, 1
             size_hint_y: None
             height: dp(30)
+
+
+<ChevronConfiguratorScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(14), dp(18)
+        spacing: dp(10)
+        canvas.before:
+            Color:
+                rgba: 0.015, 0.045, 0.105, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(46)
+            spacing: dp(8)
+
+            Button:
+                text: "Назад"
+                background_normal: ""
+                background_down: ""
+                background_color: 0.08, 0.15, 0.27, 1
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "13sp"
+                size_hint_x: None
+                width: dp(82)
+                on_release: root.goto_chevrons()
+
+            Label:
+                text: root.kit_title
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "20sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+
+            Button:
+                text: "Повторить"
+                background_normal: ""
+                background_down: ""
+                background_color: 0.08, 0.15, 0.27, 1
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "12sp"
+                size_hint_x: None
+                width: dp(90)
+                on_release: root.load_detail()
+
+        Label:
+            text: "Загрузка..." if root.loading else root.price_text
+            color: 0.86, 0.91, 0.98, 1
+            bold: True
+            font_size: "14sp"
+            halign: "center"
+            valign: "middle"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(28)
+
+        Label:
+            text: "Состав комплекта"
+            color: 1, 1, 1, 1
+            bold: True
+            font_size: "16sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(24)
+
+        RecycleView:
+            id: config_items
+            viewclass: "ChevronKitItemRow"
+            size_hint_y: 0.34
+            scroll_type: ["bars", "content"]
+            bar_width: dp(4)
+
+            RecycleBoxLayout:
+                default_size: None, dp(106)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
+                spacing: dp(8)
+
+        Label:
+            text: "Настройки"
+            color: 1, 1, 1, 1
+            bold: True
+            font_size: "16sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(24)
+
+        RecycleView:
+            id: config_options
+            viewclass: "ChevronOptionRow"
+            size_hint_y: 0.52
+            scroll_type: ["bars", "content"]
+            bar_width: dp(4)
+
+            RecycleBoxLayout:
+                default_size: None, dp(58)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
+                spacing: dp(7)
+
+        Label:
+            text: root.status_text
+            color: 0.96, 0.72, 0.72, 1
+            font_size: "12sp"
+            halign: "center"
+            valign: "middle"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(28)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(50)
+            spacing: dp(8)
+
+            Button:
+                text: "Выбрать другой дизайн"
+                background_normal: ""
+                background_down: ""
+                background_color: 0.08, 0.15, 0.27, 1
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "12sp"
+                on_release: root.confirm_choose_other()
+
+            Button:
+                text: root.next_button_text
+                background_normal: ""
+                background_down: ""
+                background_color: 0.20, 0.42, 0.78, 1
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "15sp"
+                on_release: root.next_step()
+
+
+<ChevronNamesDraftScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(18), dp(22)
+        spacing: dp(12)
+        canvas.before:
+            Color:
+                rgba: 0.015, 0.045, 0.105, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        Button:
+            text: "Назад"
+            background_normal: ""
+            background_down: ""
+            background_color: 0.08, 0.15, 0.27, 1
+            color: 1, 1, 1, 1
+            bold: True
+            size_hint: None, None
+            width: dp(92)
+            height: dp(44)
+            on_release: root.goto_configurator()
+
+        Label:
+            text: "Фамилии / Позывные"
+            color: 1, 1, 1, 1
+            bold: True
+            font_size: "24sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(42)
+
+        Label:
+            text: root.summary_text
+            color: 0.86, 0.91, 0.98, 1
+            font_size: "13sp"
+            halign: "left"
+            valign: "top"
+            text_size: self.size
+
+        Label:
+            text: root.status_text
+            color: 0.96, 0.72, 0.72, 1
+            font_size: "13sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(52)
 
 
 <EmployeePanelScreen>:

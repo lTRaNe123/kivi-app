@@ -12,6 +12,7 @@ from kivy.lang import Builder
 from kivy.graphics import Color, Line, RoundedRectangle
 from kivy.metrics import dp
 from kivy.properties import (
+    BooleanProperty,
     ObjectProperty,
     StringProperty,
     ListProperty,
@@ -130,6 +131,52 @@ class NavListRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
         screen = app.root.current_screen
         if hasattr(screen, "handle_nav_action"):
             screen.handle_nav_action(self.action, self.payload)
+
+
+class ChevronKitItemRow(RecycleDataViewBehavior, BoxLayout):
+    title = StringProperty("")
+    meta = StringProperty("")
+    image_url = StringProperty("")
+    placeholder = StringProperty("ШЕВРОН")
+
+    def refresh_view_attrs(self, rv, index, data):
+        result = super().refresh_view_attrs(rv, index, data)
+        self.title = data.get("title") or ""
+        self.meta = data.get("meta") or ""
+        self.image_url = data.get("image_url") or ""
+        self.placeholder = data.get("placeholder") or "ШЕВРОН"
+        return result
+
+
+class ChevronOptionRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
+    group_code = StringProperty("")
+    option_code = StringProperty("")
+    title = StringProperty("")
+    mark = StringProperty("")
+    price_text = StringProperty("")
+    selection_type = StringProperty("single")
+    selected = BooleanProperty(False)
+    option_disabled = BooleanProperty(False)
+
+    def refresh_view_attrs(self, rv, index, data):
+        result = super().refresh_view_attrs(rv, index, data)
+        self.group_code = data.get("group_code") or ""
+        self.option_code = data.get("option_code") or ""
+        self.title = data.get("title") or ""
+        self.mark = data.get("mark") or ""
+        self.price_text = data.get("price_text") or ""
+        self.selection_type = data.get("selection_type") or "single"
+        self.selected = bool(data.get("selected"))
+        self.option_disabled = bool(data.get("option_disabled"))
+        return result
+
+    def on_release(self):
+        if self.option_disabled:
+            return
+        app = App.get_running_app()
+        screen = app.root.current_screen
+        if hasattr(screen, "toggle_option"):
+            screen.toggle_option(self.group_code, self.option_code)
 
 
 def fill_cards(container, items):
@@ -1147,10 +1194,9 @@ class ChevronOrderScreen(Screen):
     def handle_nav_action(self, action, payload):
         if action != "kit":
             return
-        detail = self.manager.get_screen("chevron_kit_detail")
-        detail.kit_code = payload.get("code") or ""
-        detail.kit_title = payload.get("title") or "Комплект"
-        self.manager.current = "chevron_kit_detail"
+        configurator = self.manager.get_screen("chevron_configurator")
+        configurator.open_kit(payload.get("code") or "", payload.get("title") or "Комплект")
+        self.manager.current = "chevron_configurator"
 
     def goto_voentorg(self):
         self.manager.current = "voentorg"
@@ -1212,6 +1258,313 @@ class ChevronKitDetailScreen(Screen):
         self.manager.current = "chevron_order"
 
 
+class ChevronConfiguratorScreen(Screen):
+    kit_code = StringProperty("")
+    kit_title = StringProperty("Комплект")
+    status_text = StringProperty("")
+    price_text = StringProperty("Стоимость пока не назначена")
+    next_button_text = StringProperty("Далее")
+    loading = BooleanProperty(False)
+    kit_detail = ObjectProperty({})
+    selected_options = ObjectProperty({})
+    price_available = BooleanProperty(False)
+    preliminary_price_rub = NumericProperty(0)
+    preliminary_price_st = NumericProperty(0)
+
+    def open_kit(self, kit_code, kit_title):
+        if self.kit_code != kit_code:
+            self.kit_detail = {}
+            self.selected_options = {}
+            self.ids.config_items.data = []
+            self.ids.config_options.data = []
+        self.kit_code = kit_code
+        self.kit_title = kit_title
+
+    def on_pre_enter(self, *args):
+        if self.kit_detail and self.kit_detail.get("kit", {}).get("code") == self.kit_code:
+            self._render()
+            return
+        self.load_detail()
+
+    def load_detail(self):
+        if not self.kit_code:
+            self.status_text = "Комплект не выбран"
+            return
+        self.loading = True
+        self.status_text = "Загружаем конфигуратор..."
+        self.ids.config_items.data = []
+        self.ids.config_options.data = []
+
+        def worker():
+            try:
+                data = api_client.get_chevron_kit_detail(self.kit_code)
+            except Exception as exc:
+                msg = f"Ошибка конфигуратора: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                self.kit_detail = data
+                kit = data.get("kit") or {}
+                self.kit_title = kit.get("title") or self.kit_title
+                self.price_available = bool(kit.get("price_available"))
+                self._ensure_selection_state()
+                self._render()
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _ensure_selection_state(self):
+        if self.selected_options:
+            return
+        self.selected_options = {}
+
+    def _render(self):
+        data = self.kit_detail or {}
+        self._render_items(data.get("items") or [])
+        self._render_options(data.get("option_groups") or [])
+        self._recalculate_price()
+        if not self.status_text.startswith("Ошибка"):
+            self.status_text = "" if not self.loading else "Загружаем конфигуратор..."
+
+    def _render_items(self, items):
+        self.ids.config_items.data = [
+            {
+                "title": item.get("title") or "",
+                "meta": self._item_meta(item),
+                "image_url": item.get("image_url") or "",
+                "placeholder": "ШЕВРОН",
+            }
+            for item in items
+        ]
+
+    def _item_meta(self, item):
+        qty = item.get("quantity") or "1"
+        unit = item.get("unit") or "шт"
+        required = "обязательная" if item.get("is_required") else "дополнительная"
+        return f"{qty} {unit} · {required}"
+
+    def _render_options(self, groups):
+        rows = []
+        for group in groups:
+            options = [
+                option for option in (group.get("options") or [])
+                if self._option_visible(option)
+            ]
+            if not options:
+                continue
+            rows.append({
+                "group_code": group.get("code") or "",
+                "option_code": "",
+                "title": group.get("title") or "",
+                "mark": "обязательно" if group.get("is_required") else "",
+                "price_text": "",
+                "selection_type": "header",
+                "selected": False,
+                "option_disabled": True,
+            })
+            for option in options:
+                group_code = group.get("code") or ""
+                option_code = option.get("code") or ""
+                rows.append({
+                    "group_code": group_code,
+                    "option_code": option_code,
+                    "title": option.get("title") or "",
+                    "mark": self._option_mark(group.get("selection_type"), group_code, option_code),
+                    "price_text": self._option_price_text(option),
+                    "selection_type": group.get("selection_type") or "single",
+                    "selected": self._is_selected(group_code, option_code),
+                    "option_disabled": self._option_disabled(option),
+                })
+        self.ids.config_options.data = rows
+
+    def _option_visible(self, option):
+        visible_if = option.get("visible_if")
+        if not visible_if:
+            return True
+        if not isinstance(visible_if, dict):
+            return True
+        return self._conditions_match(visible_if)
+
+    def _option_disabled(self, option):
+        disabled_if = option.get("disabled_if")
+        conflicts = option.get("conflicts_with") or []
+        if disabled_if and isinstance(disabled_if, dict) and self._conditions_match(disabled_if):
+            return True
+        if isinstance(conflicts, list):
+            selected_codes = self._selected_codes()
+            return any(code in selected_codes for code in conflicts)
+        return False
+
+    def _conditions_match(self, conditions):
+        selected_codes = self._selected_codes()
+        for _, expected in conditions.items():
+            if isinstance(expected, list):
+                if not any(code in selected_codes for code in expected):
+                    return False
+            elif expected not in selected_codes:
+                return False
+        return True
+
+    def _selected_codes(self):
+        codes = set()
+        for selected in (self.selected_options or {}).values():
+            if isinstance(selected, list):
+                codes.update(selected)
+            elif selected:
+                codes.add(selected)
+        return codes
+
+    def _is_selected(self, group_code, option_code):
+        selected = (self.selected_options or {}).get(group_code)
+        if isinstance(selected, list):
+            return option_code in selected
+        return selected == option_code
+
+    def _option_mark(self, selection_type, group_code, option_code):
+        selected = self._is_selected(group_code, option_code)
+        if selection_type == "multiple":
+            return "✓" if selected else ""
+        return "●" if selected else "○"
+
+    def _option_price_text(self, option):
+        if option.get("price_available"):
+            rub = option.get("price_rub")
+            st = option.get("price_st")
+            parts = []
+            if rub is not None:
+                parts.append(f"{rub} ₽")
+            if st is not None:
+                parts.append(f"{st} ST")
+            return " / ".join(parts)
+        return "цена не назначена"
+
+    def toggle_option(self, group_code, option_code):
+        groups = self.kit_detail.get("option_groups") or []
+        group = next((g for g in groups if g.get("code") == group_code), None)
+        if not group:
+            return
+        selected = dict(self.selected_options or {})
+        if group.get("selection_type") == "multiple":
+            current = list(selected.get(group_code) or [])
+            if option_code in current:
+                current.remove(option_code)
+            else:
+                current.append(option_code)
+            selected[group_code] = current
+        else:
+            selected[group_code] = option_code
+        self.selected_options = selected
+        self._render()
+
+    def _recalculate_price(self):
+        kit = (self.kit_detail or {}).get("kit") or {}
+        if not kit.get("price_available"):
+            self.price_available = False
+            self.price_text = "Стоимость пока не назначена"
+            return
+        rub_total = 0.0
+        st_total = 0.0
+        for item in self.kit_detail.get("items") or []:
+            try:
+                rub_total += float(item.get("price_rub") or 0) * float(item.get("quantity") or 1)
+            except (TypeError, ValueError):
+                pass
+        selected_codes = self._selected_codes()
+        for group in self.kit_detail.get("option_groups") or []:
+            for option in group.get("options") or []:
+                if option.get("code") not in selected_codes:
+                    continue
+                try:
+                    rub_total += float(option.get("price_rub") or 0)
+                    st_total += float(option.get("price_st") or 0)
+                except (TypeError, ValueError):
+                    pass
+        self.preliminary_price_rub = rub_total
+        self.preliminary_price_st = st_total
+        self.price_text = f"Предварительно: {rub_total:.2f} ₽ / {st_total:.2f} ST"
+
+    def validate_required(self):
+        missing = []
+        for group in self.kit_detail.get("option_groups") or []:
+            if not group.get("is_required"):
+                continue
+            code = group.get("code")
+            selected = (self.selected_options or {}).get(code)
+            if isinstance(selected, list):
+                ok = len(selected) > 0
+            else:
+                ok = bool(selected)
+            if not ok:
+                missing.append(group.get("title") or code)
+        if missing:
+            self.status_text = "Выберите: " + ", ".join(missing)
+            return False
+        return True
+
+    def next_step(self):
+        if not self.validate_required():
+            return
+        names_screen = self.manager.get_screen("chevron_names_draft")
+        names_screen.set_config(
+            self.kit_title,
+            self.kit_code,
+            self.selected_options,
+            self.price_available,
+            self.price_text,
+        )
+        self.manager.current = "chevron_names_draft"
+
+    def confirm_choose_other(self):
+        content = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(10))
+        content.add_widget(make_inventory_label("Текущая конфигурация будет сброшена. Выбрать другой дизайн?"))
+        row = BoxLayout(size_hint_y=None, height=dp(44), spacing=dp(8))
+        cancel = Button(text="Отмена")
+        ok = Button(text="Сбросить")
+        row.add_widget(cancel)
+        row.add_widget(ok)
+        content.add_widget(row)
+        popup = Popup(title="Выбор дизайна", content=content, size_hint=(0.9, 0.42))
+        cancel.bind(on_release=popup.dismiss)
+
+        def do_reset(*_):
+            popup.dismiss()
+            self.selected_options = {}
+            self.kit_detail = {}
+            self.manager.current = "chevron_order"
+
+        ok.bind(on_release=do_reset)
+        popup.open()
+
+    def goto_chevrons(self):
+        self.manager.current = "chevron_order"
+
+
+class ChevronNamesDraftScreen(Screen):
+    summary_text = StringProperty("")
+    status_text = StringProperty("")
+
+    def set_config(self, kit_title, kit_code, selected_options, price_available, price_text):
+        lines = [f"Комплект: {kit_title}", f"Код: {kit_code}", "Выбранные параметры:"]
+        for group_code, value in (selected_options or {}).items():
+            if isinstance(value, list):
+                value = ", ".join(value) if value else "-"
+            lines.append(f"{group_code}: {value}")
+        lines.append(price_text)
+        self.summary_text = "\n".join(lines)
+        self.status_text = "" if price_available else "Оформление временно недоступно: стоимость пока не назначена."
+
+    def goto_configurator(self):
+        self.manager.current = "chevron_configurator"
+
+
 class EmployeePanelScreen(Screen):
     def on_pre_enter(self, *args):
         fill_cards(
@@ -1249,6 +1602,8 @@ class SixnerInventoryApp(App):
         sm.add_widget(VoentorgScreen(name="voentorg"))
         sm.add_widget(ChevronOrderScreen(name="chevron_order"))
         sm.add_widget(ChevronKitDetailScreen(name="chevron_kit_detail"))
+        sm.add_widget(ChevronConfiguratorScreen(name="chevron_configurator"))
+        sm.add_widget(ChevronNamesDraftScreen(name="chevron_names_draft"))
         sm.add_widget(EmployeePanelScreen(name="employee_panel"))
         sm.add_widget(TransferListScreen(name="transfers"))
         sm.add_widget(TransferCreateScreen(name="transfer_create"))

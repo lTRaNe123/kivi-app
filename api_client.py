@@ -36,6 +36,7 @@ class ApiClient:
       /api/finance_withdraw.php
       /api/voentorg_menu.php
       /api/chevron_kits.php
+      /api/chevron_kit_detail.php
     """
 
     def __init__(self, base_url: str):
@@ -371,6 +372,26 @@ class ApiClient:
         if not isinstance(kit, dict):
             raise ApiError("API шевронов не вернул kit")
         return kit
+
+    def get_chevron_kit_detail(self, kit_code: str) -> Dict[str, Any]:
+        """
+        GET /api/chevron_kit_detail.php?code=...
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json(
+            "GET",
+            "chevron_kit_detail.php",
+            params={"code": kit_code},
+        )
+        if not isinstance(payload.get("kit") or {}, dict):
+            raise ApiError("API конфигуратора не вернул kit")
+        if not isinstance(payload.get("items") or [], list):
+            raise ApiError("API конфигуратора не вернул items")
+        if not isinstance(payload.get("option_groups") or [], list):
+            raise ApiError("API конфигуратора не вернул option_groups")
+        return payload
 
 
 # ----- ГЛОБАЛЬНЫЙ КЛИЕНТ ДЛЯ main.py -----
