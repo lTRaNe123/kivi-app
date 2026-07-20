@@ -48,6 +48,9 @@ class ApiClient:
       /api/employee_order_detail.php
       /api/employee_order_claim.php
       /api/employee_order_complete.php
+      /api/employee_admin_users.php
+      /api/employee_admin_user_detail.php
+      /api/employee_admin_roles_update.php
     """
 
     def __init__(self, base_url: str):
@@ -664,6 +667,61 @@ class ApiClient:
                 "role": role,
                 "comment": comment or "",
                 "idempotency_key": idempotency_key,
+            },
+        )
+
+    def get_employee_admin_users(
+        self,
+        query: str = "",
+        role: str = "",
+        page: int = 1,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        """
+        GET /api/employee_admin_users.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        params = {"page": page, "limit": limit}
+        if query:
+            params["q"] = query
+        if role:
+            params["role"] = role
+        payload = self._request_json("GET", "employee_admin_users.php", params=params)
+        if not isinstance(payload.get("users") or [], list):
+            raise ApiError("API сотрудников не вернул users")
+        return payload
+
+    def get_employee_admin_user_detail(self, user_id: int) -> Dict[str, Any]:
+        """
+        GET /api/employee_admin_user_detail.php?id=...
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json(
+            "GET",
+            "employee_admin_user_detail.php",
+            params={"id": int(user_id)},
+        )
+        if not isinstance(payload.get("user") or {}, dict):
+            raise ApiError("API сотрудника не вернул user")
+        return payload
+
+    def update_employee_admin_roles(self, employee_user_id: int, role_codes: List[str]) -> Dict[str, Any]:
+        """
+        POST /api/employee_admin_roles_update.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        return self._request_json(
+            "POST",
+            "employee_admin_roles_update.php",
+            data={
+                "employee_user_id": int(employee_user_id),
+                "role_codes": json.dumps(role_codes or [], ensure_ascii=False),
             },
         )
 

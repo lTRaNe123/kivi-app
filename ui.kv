@@ -558,6 +558,84 @@
         text_size: self.size
 
 
+<EmployeeUserListRow>:
+    orientation: "horizontal"
+    spacing: dp(10)
+    padding: dp(12), dp(10)
+    size_hint_y: None
+    height: dp(112)
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+        Color:
+            rgba: 0.82, 0.82, 0.80, 1
+        Line:
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
+            width: 1
+
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(4)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(24)
+
+            Label:
+                text: root.title
+                color: 0.04, 0.04, 0.04, 1
+                bold: True
+                font_size: "15sp"
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+
+            Label:
+                text: root.status_text
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "10sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+                size_hint_x: None
+                width: dp(92)
+                canvas.before:
+                    Color:
+                        rgba: root.status_color
+                    RoundedRectangle:
+                        pos: self.pos
+                        size: self.size
+                        radius: [dp(6)]
+
+        FinePrint:
+            text: root.subtitle
+            color: 0.30, 0.30, 0.30, 1
+            size_hint_y: None
+            height: dp(22)
+
+        FinePrint:
+            text: root.roles_text
+            color: 0.20, 0.20, 0.20, 1
+            size_hint_y: None
+            height: dp(34)
+
+    Label:
+        text: ">"
+        color: 0.20, 0.20, 0.20, 1
+        bold: True
+        font_size: "20sp"
+        size_hint_x: None
+        width: dp(18)
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+
+
 <LoginScreen>:
     login_input: login_input
     password_input: password_input
@@ -2071,6 +2149,230 @@
             color: 0.34, 0.34, 0.34, 1
             size_hint_y: None
             height: dp(30)
+
+
+<EmployeeAdminUsersScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(18), dp(22)
+        spacing: dp(10)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(44)
+
+            SecondaryButton:
+                text: "Назад"
+                size_hint_x: None
+                width: dp(92)
+                on_release: root.goto_employee()
+
+            Label:
+                text: "Управление сотрудниками"
+                color: 0.04, 0.04, 0.04, 1
+                bold: True
+                font_size: "20sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+
+            SecondaryButton:
+                text: "Обновить"
+                size_hint_x: None
+                width: dp(104)
+                on_release: root.load_users()
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(48)
+            spacing: dp(8)
+
+            AppTextInput:
+                id: employee_admin_search
+                hint_text: "Поиск"
+                multiline: False
+
+            SecondaryButton:
+                text: "Найти"
+                size_hint_x: None
+                width: dp(86)
+                on_release: root.load_users()
+
+        Spinner:
+            id: employee_role_filter
+            text: "Все роли"
+            values: ("Все роли",)
+            size_hint_y: None
+            height: dp(44)
+            on_text: root.on_role_filter(self.text)
+
+        RecycleView:
+            id: employee_admin_users_list
+            viewclass: "EmployeeUserListRow"
+            scroll_type: ["bars", "content"]
+            bar_width: dp(4)
+
+            RecycleBoxLayout:
+                default_size: None, dp(112)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
+                spacing: dp(8)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(42)
+            spacing: dp(8)
+
+            FinePrint:
+                text: "Загрузка..." if root.loading else root.status_text
+                color: 0.34, 0.34, 0.34, 1
+
+            SecondaryButton:
+                text: "Ещё"
+                size_hint_x: None
+                width: dp(82)
+                disabled: root.loading or not root.has_more
+                on_release: root.load_more()
+
+
+<EmployeeAdminUserDetailScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(18), dp(22)
+        spacing: dp(10)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(44)
+
+            SecondaryButton:
+                text: "Назад"
+                size_hint_x: None
+                width: dp(92)
+                on_release: root.goto_users()
+
+            Label:
+                text: root.title_text
+                color: 0.04, 0.04, 0.04, 1
+                bold: True
+                font_size: "20sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+
+            SecondaryButton:
+                text: "Обновить"
+                size_hint_x: None
+                width: dp(104)
+                on_release: root.load_detail()
+
+        ScrollView:
+            bar_width: dp(4)
+
+            BoxLayout:
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: dp(10)
+
+                CardBox:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: dp(128)
+
+                    SectionLabel:
+                        text: "Сотрудник"
+
+                    FinePrint:
+                        text: root.meta_text
+                        color: 0.28, 0.28, 0.28, 1
+
+                CardBox:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: dp(214)
+
+                    SectionLabel:
+                        text: "Рабочие роли"
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: dp(42)
+                        spacing: dp(8)
+
+                        CheckBox:
+                            active: root.embroiderer_enabled
+                            size_hint_x: None
+                            width: dp(42)
+                            on_active: root.embroiderer_enabled = self.active
+
+                        Label:
+                            text: "Вышивальщик"
+                            color: 0.06, 0.06, 0.06, 1
+                            halign: "left"
+                            valign: "middle"
+                            text_size: self.size
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: dp(42)
+                        spacing: dp(8)
+
+                        CheckBox:
+                            active: root.cutter_enabled
+                            size_hint_x: None
+                            width: dp(42)
+                            on_active: root.cutter_enabled = self.active
+
+                        Label:
+                            text: "Вырезальщик / комплектовальщик"
+                            color: 0.06, 0.06, 0.06, 1
+                            halign: "left"
+                            valign: "middle"
+                            text_size: self.size
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: dp(42)
+                        spacing: dp(8)
+
+                        CheckBox:
+                            active: root.courier_enabled
+                            size_hint_x: None
+                            width: dp(42)
+                            on_active: root.courier_enabled = self.active
+
+                        Label:
+                            text: "Доставщик"
+                            color: 0.06, 0.06, 0.06, 1
+                            halign: "left"
+                            valign: "middle"
+                            text_size: self.size
+
+        PrimaryButton:
+            text: "Сохранить"
+            disabled: root.loading or root.saving
+            on_release: root.save_roles()
+
+        FinePrint:
+            text: "Загрузка..." if root.loading else root.status_text
+            color: 0.34, 0.34, 0.34, 1
+            size_hint_y: None
+            height: dp(34)
 
 
 <EmployeePanelScreen>:

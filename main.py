@@ -300,6 +300,31 @@ class ChevronOrderListRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
             screen.open_order(self.order_id)
 
 
+class EmployeeUserListRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
+    user_id = NumericProperty(0)
+    title = StringProperty("")
+    subtitle = StringProperty("")
+    roles_text = StringProperty("")
+    status_text = StringProperty("")
+    status_color = ListProperty([0.55, 0.55, 0.55, 1])
+
+    def refresh_view_attrs(self, rv, index, data):
+        result = super().refresh_view_attrs(rv, index, data)
+        self.user_id = int(data.get("user_id") or 0)
+        self.title = data.get("title") or ""
+        self.subtitle = data.get("subtitle") or ""
+        self.roles_text = data.get("roles_text") or ""
+        self.status_text = data.get("status_text") or ""
+        self.status_color = data.get("status_color") or [0.55, 0.55, 0.55, 1]
+        return result
+
+    def on_release(self):
+        app = App.get_running_app()
+        screen = app.root.current_screen
+        if hasattr(screen, "open_user"):
+            screen.open_user(self.user_id)
+
+
 def fill_cards(container, items):
     container.clear_widgets()
     for idx, item in enumerate(items, start=1):
@@ -2858,6 +2883,224 @@ class EmployeeOrderDetailScreen(Screen):
         self.manager.current = "employee_orders"
 
 
+class EmployeeAdminUsersScreen(Screen):
+    status_text = StringProperty("")
+    loading = BooleanProperty(False)
+    page = NumericProperty(1)
+    has_more = BooleanProperty(False)
+    role_filter = StringProperty("")
+    role_options = ObjectProperty({})
+
+    def on_pre_enter(self, *args):
+        if not self.ids.employee_admin_users_list.data:
+            self.load_users()
+
+    def load_users(self):
+        self.loading = True
+        self.status_text = "Загружаем сотрудников..."
+        self.ids.employee_admin_users_list.data = []
+        query = (self.ids.employee_admin_search.text or "").strip()
+        role_filter = self.role_filter
+
+        def worker():
+            try:
+                data = api_client.get_employee_admin_users(query=query, role=role_filter, page=1, limit=20)
+            except Exception as exc:
+                msg = f"Ошибка сотрудников: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                self._sync_role_filter(data.get("roles") or [])
+                users = data.get("users") or []
+                pagination = data.get("pagination") or {}
+                self.page = int(pagination.get("page") or 1)
+                self.has_more = bool(pagination.get("has_more"))
+                self.ids.employee_admin_users_list.data = [self._row_payload(user) for user in users]
+                self.status_text = "" if users else "Сотрудники не найдены."
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def load_more(self):
+        if self.loading or not self.has_more:
+            return
+        self.loading = True
+        self.status_text = "Загружаем ещё..."
+        next_page = int(self.page) + 1
+        query = (self.ids.employee_admin_search.text or "").strip()
+        role_filter = self.role_filter
+
+        def worker():
+            try:
+                data = api_client.get_employee_admin_users(query=query, role=role_filter, page=next_page, limit=20)
+            except Exception as exc:
+                msg = f"Ошибка сотрудников: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                users = data.get("users") or []
+                pagination = data.get("pagination") or {}
+                self.page = int(pagination.get("page") or next_page)
+                self.has_more = bool(pagination.get("has_more"))
+                self.ids.employee_admin_users_list.data = list(self.ids.employee_admin_users_list.data) + [
+                    self._row_payload(user) for user in users
+                ]
+                self.status_text = ""
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _sync_role_filter(self, roles):
+        options = {"Все роли": ""}
+        for role in roles:
+            title = role.get("title") or role.get("code") or ""
+            code = role.get("code") or ""
+            if title and code:
+                options[title] = code
+        self.role_options = options
+        spinner = self.ids.employee_role_filter
+        spinner.values = tuple(options.keys())
+        if spinner.text not in options:
+            spinner.text = "Все роли"
+
+    def on_role_filter(self, text):
+        self.role_filter = (self.role_options or {}).get(text, "")
+        self.load_users()
+
+    def _row_payload(self, user):
+        roles = user.get("roles") or []
+        roles_text = ", ".join(role.get("title") or role.get("code") or "" for role in roles) or "Роли не назначены"
+        active = bool(user.get("is_active"))
+        return {
+            "user_id": int(user.get("uid") or 0),
+            "title": user.get("name") or user.get("username") or "",
+            "subtitle": f"@{user.get('username') or ''} · {user.get('position') or 'без должности'}",
+            "roles_text": roles_text,
+            "status_text": "Активен" if active else "Неактивен",
+            "status_color": [0.45, 0.50, 0.30, 1] if active else [0.58, 0.58, 0.58, 1],
+        }
+
+    def open_user(self, user_id):
+        detail = self.manager.get_screen("employee_admin_user_detail")
+        detail.open_user(user_id)
+        self.manager.current = "employee_admin_user_detail"
+
+    def goto_employee(self):
+        self.manager.current = "employee_panel"
+
+
+class EmployeeAdminUserDetailScreen(Screen):
+    user_id = NumericProperty(0)
+    title_text = StringProperty("Сотрудник")
+    meta_text = StringProperty("")
+    status_text = StringProperty("")
+    loading = BooleanProperty(False)
+    saving = BooleanProperty(False)
+    embroiderer_enabled = BooleanProperty(False)
+    cutter_enabled = BooleanProperty(False)
+    courier_enabled = BooleanProperty(False)
+
+    def open_user(self, user_id):
+        self.user_id = int(user_id or 0)
+        self.load_detail()
+
+    def load_detail(self):
+        if not self.user_id:
+            self.status_text = "Сотрудник не выбран"
+            return
+        self.loading = True
+        self.status_text = "Загружаем карточку..."
+
+        def worker():
+            try:
+                data = api_client.get_employee_admin_user_detail(self.user_id)
+            except Exception as exc:
+                msg = f"Ошибка карточки: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                self._render(data)
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _render(self, data):
+        user = data.get("user") or {}
+        codes = {role.get("code") for role in (data.get("roles") or [])}
+        self.title_text = user.get("name") or user.get("username") or "Сотрудник"
+        active = "Активен" if user.get("is_active") else "Неактивен"
+        self.meta_text = f"@{user.get('username') or ''}\n{user.get('position') or 'без должности'}\n{active}"
+        self.embroiderer_enabled = "EMBROIDERER" in codes
+        self.cutter_enabled = "CUTTER_PACKER" in codes
+        self.courier_enabled = "COURIER" in codes
+        self.status_text = ""
+
+    def save_roles(self):
+        if self.saving or self.loading:
+            return
+        role_codes = []
+        if self.embroiderer_enabled:
+            role_codes.append("EMBROIDERER")
+        if self.cutter_enabled:
+            role_codes.append("CUTTER_PACKER")
+        if self.courier_enabled:
+            role_codes.append("COURIER")
+        self.saving = True
+        self.status_text = "Сохраняем роли..."
+
+        def worker():
+            try:
+                data = api_client.update_employee_admin_roles(self.user_id, role_codes)
+            except Exception as exc:
+                msg = f"Ошибка сохранения: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.saving = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.saving = False
+                self.status_text = data.get("message") or "Роли сохранены"
+                try:
+                    self.manager.get_screen("employee_admin_users").load_users()
+                except Exception:
+                    pass
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def goto_users(self):
+        self.manager.current = "employee_admin_users"
+
+
 class EmployeePanelScreen(Screen):
     status_text = StringProperty("")
     loading = BooleanProperty(False)
@@ -2904,6 +3147,13 @@ class EmployeePanelScreen(Screen):
                         "action": "admin_pricing",
                         "payload": {},
                     })
+                    rows.append({
+                        "title": "Управление сотрудниками",
+                        "subtitle": "Назначение рабочих ролей",
+                        "icon_text": "R",
+                        "action": "employee_admin_users",
+                        "payload": {},
+                    })
                 self.ids.employee_list.data = rows
                 self.status_text = "" if rows else "Нет доступных ролей сотрудника."
 
@@ -2914,6 +3164,9 @@ class EmployeePanelScreen(Screen):
     def handle_nav_action(self, action, payload):
         if action == "admin_pricing":
             self.goto_admin_pricing()
+            return
+        if action == "employee_admin_users":
+            self.manager.current = "employee_admin_users"
             return
         if action == "employee_role":
             screen = self.manager.get_screen("employee_orders")
@@ -2957,6 +3210,8 @@ class SixnerInventoryApp(App):
         sm.add_widget(ChevronAdminPricingScreen(name="chevron_admin_pricing"))
         sm.add_widget(EmployeeOrdersScreen(name="employee_orders"))
         sm.add_widget(EmployeeOrderDetailScreen(name="employee_order_detail"))
+        sm.add_widget(EmployeeAdminUsersScreen(name="employee_admin_users"))
+        sm.add_widget(EmployeeAdminUserDetailScreen(name="employee_admin_user_detail"))
         sm.add_widget(EmployeePanelScreen(name="employee_panel"))
         sm.add_widget(TransferListScreen(name="transfers"))
         sm.add_widget(TransferCreateScreen(name="transfer_create"))
