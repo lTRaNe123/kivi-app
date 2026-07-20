@@ -380,6 +380,93 @@
         text_size: self.size
 
 
+<ChevronNameLineRow>:
+    orientation: "horizontal"
+    spacing: dp(8)
+    padding: dp(10), dp(8)
+    size_hint_y: None
+    height: dp(62)
+    canvas.before:
+        Color:
+            rgba: 0.07, 0.14, 0.25, 1
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+        Color:
+            rgba: 0.42, 0.55, 0.72, 0.35
+        Line:
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
+            width: 1
+
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(2)
+
+        Label:
+            text: root.text_value
+            color: 1, 1, 1, 1
+            bold: True
+            font_size: "15sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+
+        Label:
+            text: "Количество: " + str(root.quantity)
+            color: 0.70, 0.78, 0.88, 1
+            font_size: "12sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+
+    Button:
+        text: "-"
+        background_normal: ""
+        background_down: ""
+        background_color: 0.08, 0.15, 0.27, 1
+        color: 1, 1, 1, 1
+        bold: True
+        size_hint_x: None
+        width: dp(34)
+        on_release: root.increment(-1)
+
+    Button:
+        text: "+"
+        background_normal: ""
+        background_down: ""
+        background_color: 0.18, 0.37, 0.68, 1
+        color: 1, 1, 1, 1
+        bold: True
+        size_hint_x: None
+        width: dp(34)
+        on_release: root.increment(1)
+
+    Button:
+        text: "Изм."
+        background_normal: ""
+        background_down: ""
+        background_color: 0.08, 0.15, 0.27, 1
+        color: 1, 1, 1, 1
+        bold: True
+        font_size: "11sp"
+        size_hint_x: None
+        width: dp(48)
+        on_release: root.edit_line()
+
+    Button:
+        text: "Удал."
+        background_normal: ""
+        background_down: ""
+        background_color: 0.23, 0.10, 0.12, 1
+        color: 1, 1, 1, 1
+        bold: True
+        font_size: "11sp"
+        size_hint_x: None
+        width: dp(52)
+        on_release: root.remove_line()
+
+
 <LoginScreen>:
     login_input: login_input
     password_input: password_input
@@ -1073,8 +1160,134 @@
 <ChevronNamesDraftScreen>:
     BoxLayout:
         orientation: "vertical"
-        padding: dp(18), dp(22)
-        spacing: dp(12)
+        padding: dp(14), dp(18)
+        spacing: dp(10)
+        canvas.before:
+            Color:
+                rgba: 0.015, 0.045, 0.105, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(46)
+            spacing: dp(8)
+
+            Button:
+                text: "Назад"
+                background_normal: ""
+                background_down: ""
+                background_color: 0.08, 0.15, 0.27, 1
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "13sp"
+                size_hint_x: None
+                width: dp(82)
+                on_release: root.goto_configurator()
+
+            Label:
+                text: root.kit_title
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "20sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+
+        Label:
+            text: "Фамилии / Позывные"
+            color: 1, 1, 1, 1
+            bold: True
+            font_size: "22sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(34)
+
+        Label:
+            text: root.summary_text
+            color: 0.86, 0.91, 0.98, 1
+            font_size: "12sp"
+            halign: "left"
+            valign: "top"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(112)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(48)
+            spacing: dp(8)
+
+            TextInput:
+                id: name_input
+                hint_text: "Фамилия или позывной"
+                multiline: False
+                background_color: 0.07, 0.14, 0.25, 1
+                foreground_color: 1, 1, 1, 1
+                hint_text_color: 0.58, 0.67, 0.78, 1
+                cursor_color: 1, 1, 1, 1
+                padding: dp(10), dp(12)
+                font_size: "15sp"
+
+            Button:
+                text: "Добавить"
+                background_normal: ""
+                background_down: ""
+                background_color: 0.18, 0.37, 0.68, 1
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "13sp"
+                size_hint_x: None
+                width: dp(104)
+                on_release: root.add_line()
+
+        RecycleView:
+            id: names_lines
+            viewclass: "ChevronNameLineRow"
+            size_hint_y: 1
+            scroll_type: ["bars", "content"]
+            bar_width: dp(4)
+
+            RecycleBoxLayout:
+                default_size: None, dp(62)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
+                spacing: dp(7)
+
+        Label:
+            text: "Проверяем..." if root.loading else root.status_text
+            color: 0.96, 0.72, 0.72, 1
+            font_size: "12sp"
+            halign: "center"
+            valign: "middle"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(34)
+
+        Button:
+            text: "Продолжить"
+            background_normal: ""
+            background_down: ""
+            background_color: 0.20, 0.42, 0.78, 1
+            color: 1, 1, 1, 1
+            bold: True
+            font_size: "15sp"
+            size_hint_y: None
+            height: dp(50)
+            disabled: root.loading
+            on_release: root.continue_step()
+
+
+<ChevronQuoteConfirmScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(14), dp(18)
+        spacing: dp(10)
         canvas.before:
             Color:
                 rgba: 0.015, 0.045, 0.105, 1
@@ -1090,34 +1303,56 @@
             color: 1, 1, 1, 1
             bold: True
             size_hint: None, None
-            width: dp(92)
+            width: dp(82)
             height: dp(44)
-            on_release: root.goto_configurator()
+            on_release: root.goto_names()
 
         Label:
-            text: "Фамилии / Позывные"
+            text: root.title_text
             color: 1, 1, 1, 1
             bold: True
-            font_size: "24sp"
+            font_size: "21sp"
             halign: "left"
             valign: "middle"
             text_size: self.size
             size_hint_y: None
-            height: dp(42)
+            height: dp(44)
 
         Label:
             text: root.summary_text
             color: 0.86, 0.91, 0.98, 1
-            font_size: "13sp"
+            font_size: "12sp"
+            halign: "left"
+            valign: "top"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(132)
+
+        Label:
+            text: "Фамилии / позывные"
+            color: 1, 1, 1, 1
+            bold: True
+            font_size: "16sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(26)
+
+        Label:
+            text: root.lines_text
+            color: 0.86, 0.91, 0.98, 1
+            font_size: "14sp"
             halign: "left"
             valign: "top"
             text_size: self.size
 
         Label:
-            text: root.status_text
-            color: 0.96, 0.72, 0.72, 1
-            font_size: "13sp"
-            halign: "left"
+            text: root.price_text
+            color: 0.96, 0.86, 0.62, 1
+            bold: True
+            font_size: "15sp"
+            halign: "center"
             valign: "middle"
             text_size: self.size
             size_hint_y: None

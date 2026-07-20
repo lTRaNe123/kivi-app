@@ -24,6 +24,7 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
+from kivy.uix.textinput import TextInput
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 
 from api_client import api_client, ApiError
@@ -177,6 +178,38 @@ class ChevronOptionRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
         screen = app.root.current_screen
         if hasattr(screen, "toggle_option"):
             screen.toggle_option(self.group_code, self.option_code)
+
+
+class ChevronNameLineRow(RecycleDataViewBehavior, BoxLayout):
+    line_index = NumericProperty(0)
+    text_value = StringProperty("")
+    quantity = NumericProperty(1)
+
+    def refresh_view_attrs(self, rv, index, data):
+        result = super().refresh_view_attrs(rv, index, data)
+        self.line_index = int(data.get("line_index") or index)
+        self.text_value = data.get("text_value") or ""
+        self.quantity = int(data.get("quantity") or 1)
+        return result
+
+    def _screen(self):
+        app = App.get_running_app()
+        return app.root.current_screen
+
+    def edit_line(self):
+        screen = self._screen()
+        if hasattr(screen, "edit_line"):
+            screen.edit_line(self.line_index)
+
+    def remove_line(self):
+        screen = self._screen()
+        if hasattr(screen, "remove_line"):
+            screen.remove_line(self.line_index)
+
+    def increment(self, delta):
+        screen = self._screen()
+        if hasattr(screen, "change_quantity"):
+            screen.change_quantity(self.line_index, delta)
 
 
 def fill_cards(container, items):
@@ -1516,6 +1549,7 @@ class ChevronConfiguratorScreen(Screen):
         names_screen.set_config(
             self.kit_title,
             self.kit_code,
+            self.kit_detail,
             self.selected_options,
             self.price_available,
             self.price_text,
@@ -1548,21 +1582,236 @@ class ChevronConfiguratorScreen(Screen):
 
 
 class ChevronNamesDraftScreen(Screen):
+    kit_title = StringProperty("Комплект")
+    kit_code = StringProperty("")
     summary_text = StringProperty("")
     status_text = StringProperty("")
+    input_text = StringProperty("")
+    price_text = StringProperty("Стоимость пока не назначена")
+    price_available = BooleanProperty(False)
+    loading = BooleanProperty(False)
+    kit_detail = ObjectProperty({})
+    selected_options = ObjectProperty({})
+    name_lines = ListProperty([])
 
-    def set_config(self, kit_title, kit_code, selected_options, price_available, price_text):
-        lines = [f"Комплект: {kit_title}", f"Код: {kit_code}", "Выбранные параметры:"]
-        for group_code, value in (selected_options or {}).items():
+    def set_config(self, kit_title, kit_code, kit_detail, selected_options, price_available, price_text):
+        old_key = (self.kit_code, self._selected_codes())
+        self.kit_title = kit_title
+        self.kit_code = kit_code
+        self.kit_detail = kit_detail or {}
+        self.selected_options = selected_options or {}
+        self.price_available = bool(price_available)
+        self.price_text = price_text or "Стоимость пока не назначена"
+        new_key = (self.kit_code, self._selected_codes())
+        if old_key != new_key:
+            self.name_lines = []
+        self._render_summary()
+        self._render_lines()
+        self.status_text = "" if self.price_available else "Оформление временно недоступно: стоимость пока не назначена."
+
+    def _selected_codes(self):
+        codes = []
+        for value in (self.selected_options or {}).values():
             if isinstance(value, list):
-                value = ", ".join(value) if value else "-"
-            lines.append(f"{group_code}: {value}")
-        lines.append(price_text)
+                codes.extend(str(item) for item in value if item)
+            elif value:
+                codes.append(str(value))
+        return tuple(sorted(codes))
+
+    def _render_summary(self):
+        lines = [f"Комплект: {self.kit_title}", "Параметры:"]
+        groups = (self.kit_detail or {}).get("option_groups") or []
+        for group in groups:
+            selected = (self.selected_options or {}).get(group.get("code"))
+            selected_codes = selected if isinstance(selected, list) else ([selected] if selected else [])
+            if not selected_codes:
+                continue
+            titles = []
+            for option in group.get("options") or []:
+                if option.get("code") in selected_codes:
+                    titles.append(option.get("title") or option.get("code"))
+            if titles:
+                lines.append(f"{group.get('title')}: {', '.join(titles)}")
+        lines.append(self.price_text)
         self.summary_text = "\n".join(lines)
-        self.status_text = "" if price_available else "Оформление временно недоступно: стоимость пока не назначена."
+
+    def _render_lines(self):
+        self.ids.names_lines.data = [
+            {
+                "line_index": index,
+                "text_value": line.get("text_value") or "",
+                "quantity": int(line.get("quantity") or 1),
+            }
+            for index, line in enumerate(self.name_lines)
+        ]
+
+    def add_line(self, confirmed_duplicate=False):
+        value = (self.ids.name_input.text or "").strip()
+        if not value:
+            self.status_text = "Введите фамилию или позывной."
+            return
+        duplicate = any((line.get("text_value") or "").strip().lower() == value.lower() for line in self.name_lines)
+        if duplicate and not confirmed_duplicate:
+            self._confirm_duplicate(value)
+            return
+        lines = list(self.name_lines)
+        lines.append({"text_value": value, "quantity": 1})
+        self.name_lines = lines
+        self.ids.name_input.text = ""
+        self.status_text = "" if self.price_available else "Оформление временно недоступно: стоимость пока не назначена."
+        self._render_lines()
+
+    def _confirm_duplicate(self, value):
+        content = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(10))
+        content.add_widget(make_inventory_label(f"Строка «{value}» уже есть. Добавить дубль?"))
+        row = BoxLayout(size_hint_y=None, height=dp(44), spacing=dp(8))
+        cancel = Button(text="Отмена")
+        ok = Button(text="Добавить")
+        row.add_widget(cancel)
+        row.add_widget(ok)
+        content.add_widget(row)
+        popup = Popup(title="Дубликат", content=content, size_hint=(0.9, 0.42))
+        cancel.bind(on_release=popup.dismiss)
+
+        def do_add(*_):
+            popup.dismiss()
+            self.add_line(confirmed_duplicate=True)
+
+        ok.bind(on_release=do_add)
+        popup.open()
+
+    def edit_line(self, index):
+        if index < 0 or index >= len(self.name_lines):
+            return
+        current = self.name_lines[index].get("text_value") or ""
+        content = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(10))
+        field = TextInput(text=current, multiline=False, size_hint_y=None, height=dp(46))
+        content.add_widget(field)
+        row = BoxLayout(size_hint_y=None, height=dp(44), spacing=dp(8))
+        cancel = Button(text="Отмена")
+        ok = Button(text="Сохранить")
+        row.add_widget(cancel)
+        row.add_widget(ok)
+        content.add_widget(row)
+        popup = Popup(title="Редактировать строку", content=content, size_hint=(0.9, 0.38))
+        cancel.bind(on_release=popup.dismiss)
+
+        def do_save(*_):
+            value = (field.text or "").strip()
+            if not value:
+                self.status_text = "Пустую строку сохранить нельзя."
+                return
+            lines = list(self.name_lines)
+            lines[index] = {"text_value": value, "quantity": max(1, int(lines[index].get("quantity") or 1))}
+            self.name_lines = lines
+            self._render_lines()
+            popup.dismiss()
+
+        ok.bind(on_release=do_save)
+        popup.open()
+
+    def remove_line(self, index):
+        if index < 0 or index >= len(self.name_lines):
+            return
+        lines = list(self.name_lines)
+        lines.pop(index)
+        self.name_lines = lines
+        self._render_lines()
+
+    def change_quantity(self, index, delta):
+        if index < 0 or index >= len(self.name_lines):
+            return
+        lines = list(self.name_lines)
+        current = max(1, int(lines[index].get("quantity") or 1))
+        lines[index] = {
+            "text_value": lines[index].get("text_value") or "",
+            "quantity": max(1, current + int(delta)),
+        }
+        self.name_lines = lines
+        self._render_lines()
+
+    def continue_step(self):
+        if not self.name_lines:
+            self.status_text = "Добавьте хотя бы одну фамилию или позывной."
+            return
+        lines = [
+            {
+                "text_value": (line.get("text_value") or "").strip(),
+                "quantity": max(1, int(line.get("quantity") or 1)),
+            }
+            for line in self.name_lines
+            if (line.get("text_value") or "").strip()
+        ]
+        if len(lines) != len(self.name_lines):
+            self.status_text = "Удалите или заполните пустые строки."
+            return
+        self.loading = True
+        self.status_text = "Проверяем стоимость..."
+        option_codes = self._selected_option_tokens()
+
+        def worker():
+            try:
+                data = api_client.create_chevron_quote(self.kit_code, option_codes, lines)
+            except Exception as exc:
+                msg = f"Ошибка расчёта: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                confirm = self.manager.get_screen("chevron_quote_confirm")
+                confirm.set_quote(self.kit_title, self.summary_text, lines, data)
+                self.manager.current = "chevron_quote_confirm"
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _selected_option_tokens(self):
+        tokens = []
+        for group_code, value in (self.selected_options or {}).items():
+            if isinstance(value, list):
+                tokens.extend(f"{group_code}:{option_code}" for option_code in value if option_code)
+            elif value:
+                tokens.append(f"{group_code}:{value}")
+        return tokens
 
     def goto_configurator(self):
         self.manager.current = "chevron_configurator"
+
+
+class ChevronQuoteConfirmScreen(Screen):
+    title_text = StringProperty("Подтверждение")
+    summary_text = StringProperty("")
+    lines_text = StringProperty("")
+    price_text = StringProperty("Стоимость пока не назначена")
+
+    def set_quote(self, kit_title, summary_text, lines, quote_payload):
+        quote = (quote_payload or {}).get("quote") or {}
+        self.title_text = f"Подтверждение: {kit_title}"
+        self.summary_text = summary_text or ""
+        self.lines_text = "\n".join(
+            f"{line.get('text_value')} × {line.get('quantity')}" for line in lines
+        )
+        if quote.get("price_available"):
+            rub = quote.get("total_price_rub")
+            st = quote.get("total_price_st")
+            parts = []
+            if rub is not None:
+                parts.append(f"{rub} ₽")
+            if st is not None:
+                parts.append(f"{st} ST")
+            self.price_text = "Стоимость: " + " / ".join(parts)
+        else:
+            self.price_text = "Стоимость пока не назначена"
+
+    def goto_names(self):
+        self.manager.current = "chevron_names_draft"
 
 
 class EmployeePanelScreen(Screen):
@@ -1604,6 +1853,7 @@ class SixnerInventoryApp(App):
         sm.add_widget(ChevronKitDetailScreen(name="chevron_kit_detail"))
         sm.add_widget(ChevronConfiguratorScreen(name="chevron_configurator"))
         sm.add_widget(ChevronNamesDraftScreen(name="chevron_names_draft"))
+        sm.add_widget(ChevronQuoteConfirmScreen(name="chevron_quote_confirm"))
         sm.add_widget(EmployeePanelScreen(name="employee_panel"))
         sm.add_widget(TransferListScreen(name="transfers"))
         sm.add_widget(TransferCreateScreen(name="transfer_create"))

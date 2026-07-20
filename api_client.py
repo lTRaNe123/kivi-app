@@ -37,6 +37,7 @@ class ApiClient:
       /api/voentorg_menu.php
       /api/chevron_kits.php
       /api/chevron_kit_detail.php
+      /api/chevron_quote.php
     """
 
     def __init__(self, base_url: str):
@@ -391,6 +392,32 @@ class ApiClient:
             raise ApiError("API конфигуратора не вернул items")
         if not isinstance(payload.get("option_groups") or [], list):
             raise ApiError("API конфигуратора не вернул option_groups")
+        return payload
+
+    def create_chevron_quote(
+        self,
+        kit_code: str,
+        option_codes: List[str],
+        lines: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        POST /api/chevron_quote.php
+        Сервер пересчитывает стоимость сам, приложение передаёт только выбор.
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json(
+            "POST",
+            "chevron_quote.php",
+            data={
+                "kit_code": kit_code,
+                "option_codes": json.dumps(option_codes, ensure_ascii=False),
+                "lines": json.dumps(lines, ensure_ascii=False),
+            },
+        )
+        if not isinstance(payload.get("quote") or {}, dict):
+            raise ApiError("API расчёта не вернул quote")
         return payload
 
 
