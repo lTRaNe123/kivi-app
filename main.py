@@ -109,6 +109,29 @@ class FinanceTableRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
         screen.open_operation_detail(self.row_data)
 
 
+class NavListRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
+    title = StringProperty("")
+    subtitle = StringProperty("")
+    icon_text = StringProperty("")
+    action = StringProperty("")
+    payload = ObjectProperty({})
+
+    def refresh_view_attrs(self, rv, index, data):
+        result = super().refresh_view_attrs(rv, index, data)
+        self.title = data.get("title") or ""
+        self.subtitle = data.get("subtitle") or ""
+        self.icon_text = data.get("icon_text") or ""
+        self.action = data.get("action") or ""
+        self.payload = data.get("payload") or {}
+        return result
+
+    def on_release(self):
+        app = App.get_running_app()
+        screen = app.root.current_screen
+        if hasattr(screen, "handle_nav_action"):
+            screen.handle_nav_action(self.action, self.payload)
+
+
 def fill_cards(container, items):
     container.clear_widgets()
     for idx, item in enumerate(items, start=1):
@@ -1020,19 +1043,173 @@ class FormViewScreen(Screen):
 
 
 class VoentorgScreen(Screen):
+    status_text = StringProperty("")
+
     def on_pre_enter(self, *args):
-        fill_cards(
-            self.ids.voentorg_cards,
-            [
-                "Заказ шевронов",
-                "Список заказов",
-                "Статус заказа",
-                "Карточка заказа",
-            ],
-        )
+        self.load_menu()
+
+    def load_menu(self):
+        self.status_text = "Загружаем Военторг..."
+        self.ids.voentorg_list.data = []
+
+        def worker():
+            try:
+                sections = api_client.get_voentorg_menu()
+            except Exception as exc:
+                msg = f"Ошибка Военторга: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, sections=sections):
+                self.ids.voentorg_list.data = [
+                    {
+                        "title": section.get("title") or "",
+                        "subtitle": section.get("subtitle") or "",
+                        "icon_text": section.get("icon") or "",
+                        "action": section.get("code") or "",
+                        "payload": section,
+                    }
+                    for section in sections
+                ]
+                self.status_text = ""
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def handle_nav_action(self, action, payload):
+        if action == "chevrons":
+            self.manager.current = "chevron_order"
+            return
+        if action == "orders":
+            self.status_text = "Мои заказы будут подключены в третьем коммите."
+            return
+        self.status_text = "Раздел будет подключен отдельной веткой Военторга."
 
     def goto_home(self):
         self.manager.current = "user_home"
+
+
+class ChevronOrderScreen(Screen):
+    status_text = StringProperty("")
+    active_tab = StringProperty("kits")
+
+    def on_pre_enter(self, *args):
+        self.active_tab = "kits"
+        self.load_kits()
+
+    def load_kits(self):
+        self.status_text = "Загружаем комплекты..."
+        self.ids.chevron_kits_list.data = []
+
+        def worker():
+            try:
+                data = api_client.get_chevron_kits()
+            except Exception as exc:
+                msg = f"Ошибка комплектов: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                kits = data.get("kits") or []
+                self.ids.chevron_kits_list.data = [
+                    {
+                        "title": kit.get("title") or "",
+                        "subtitle": kit.get("subtitle") or "",
+                        "icon_text": kit.get("icon") or "",
+                        "action": "kit",
+                        "payload": kit,
+                    }
+                    for kit in kits
+                ]
+                self.status_text = "" if kits else "Комплекты не найдены на сервере."
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def select_tab(self, tab_code):
+        self.active_tab = tab_code
+        if tab_code == "kits":
+            self.load_kits()
+            return
+        self.ids.chevron_kits_list.data = []
+        self.status_text = "Эта вкладка будет подключена после ветки комплектов."
+
+    def handle_nav_action(self, action, payload):
+        if action != "kit":
+            return
+        detail = self.manager.get_screen("chevron_kit_detail")
+        detail.kit_code = payload.get("code") or ""
+        detail.kit_title = payload.get("title") or "Комплект"
+        self.manager.current = "chevron_kit_detail"
+
+    def goto_voentorg(self):
+        self.manager.current = "voentorg"
+
+
+class ChevronKitDetailScreen(Screen):
+    kit_code = StringProperty("")
+    kit_title = StringProperty("Комплект")
+    status_text = StringProperty("")
+
+    def on_pre_enter(self, *args):
+        self.load_kit()
+
+    def load_kit(self):
+        if not self.kit_code:
+            self.status_text = "Комплект не выбран"
+            return
+        self.status_text = "Загружаем состав комплекта..."
+        self.ids.kit_items_list.data = []
+
+        def worker():
+            try:
+                kit = api_client.get_chevron_kit(self.kit_code)
+            except Exception as exc:
+                msg = f"Ошибка комплекта: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, kit=kit):
+                self.kit_title = kit.get("title") or self.kit_title
+                items = kit.get("items") or []
+                self.ids.kit_items_list.data = [
+                    {
+                        "title": item.get("title") or "",
+                        "subtitle": f"{item.get('unit') or 'шт'}",
+                        "icon_text": str(index).zfill(2),
+                        "action": "",
+                        "payload": item,
+                    }
+                    for index, item in enumerate(items, start=1)
+                ]
+                self.status_text = "" if items else "Состав комплекта не найден на сервере."
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def choose_other(self):
+        self.manager.current = "chevron_order"
+
+    def next_step(self):
+        self.status_text = "Конфигуратор будет во втором коммите."
+
+    def goto_chevrons(self):
+        self.manager.current = "chevron_order"
 
 
 class EmployeePanelScreen(Screen):
@@ -1070,6 +1247,8 @@ class SixnerInventoryApp(App):
         sm.add_widget(UserHomeScreen(name="user_home"))
         sm.add_widget(FinanceAccountScreen(name="finance_account"))
         sm.add_widget(VoentorgScreen(name="voentorg"))
+        sm.add_widget(ChevronOrderScreen(name="chevron_order"))
+        sm.add_widget(ChevronKitDetailScreen(name="chevron_kit_detail"))
         sm.add_widget(EmployeePanelScreen(name="employee_panel"))
         sm.add_widget(TransferListScreen(name="transfers"))
         sm.add_widget(TransferCreateScreen(name="transfer_create"))

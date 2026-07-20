@@ -34,6 +34,8 @@ class ApiClient:
       /api/finance_profile.php
       /api/finance_transfer.php
       /api/finance_withdraw.php
+      /api/voentorg_menu.php
+      /api/chevron_kits.php
     """
 
     def __init__(self, base_url: str):
@@ -327,6 +329,48 @@ class ApiClient:
         if not isinstance(payload, dict):
             raise ApiError("Некорректный ответ form_view.php")
         return payload
+
+    def get_voentorg_menu(self) -> List[Dict[str, Any]]:
+        """
+        GET /api/voentorg_menu.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json("GET", "voentorg_menu.php")
+        sections = payload.get("sections") or []
+        if not isinstance(sections, list):
+            raise ApiError("API Военторга не вернул sections")
+        return sections
+
+    def get_chevron_kits(self) -> Dict[str, Any]:
+        """
+        GET /api/chevron_kits.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json("GET", "chevron_kits.php")
+        if not isinstance(payload.get("kits") or [], list):
+            raise ApiError("API шевронов не вернул kits")
+        return payload
+
+    def get_chevron_kit(self, kit_code: str) -> Dict[str, Any]:
+        """
+        GET /api/chevron_kits.php?kit=...
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json(
+            "GET",
+            "chevron_kits.php",
+            params={"kit": kit_code},
+        )
+        kit = payload.get("kit") or {}
+        if not isinstance(kit, dict):
+            raise ApiError("API шевронов не вернул kit")
+        return kit
 
 
 # ----- ГЛОБАЛЬНЫЙ КЛИЕНТ ДЛЯ main.py -----

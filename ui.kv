@@ -169,6 +169,76 @@
     padding: dp(2)
 
 
+<NavListRow>:
+    orientation: "horizontal"
+    spacing: dp(12)
+    padding: dp(12), dp(9)
+    size_hint_y: None
+    height: dp(68)
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+        Color:
+            rgba: 0.88, 0.88, 0.88, 1
+        Line:
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
+            width: 1
+
+    Label:
+        text: root.icon_text
+        color: 0.14, 0.16, 0.12, 1
+        bold: True
+        font_size: "13sp"
+        size_hint_x: None
+        width: dp(38)
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+        canvas.before:
+            Color:
+                rgba: 0.92, 0.94, 0.88, 1
+            RoundedRectangle:
+                pos: self.pos
+                size: self.size
+                radius: [dp(19)]
+
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(2)
+
+        Label:
+            text: root.title
+            color: 0.04, 0.04, 0.04, 1
+            bold: True
+            font_size: "16sp"
+            halign: "left"
+            valign: "bottom"
+            text_size: self.size
+
+        Label:
+            text: root.subtitle
+            color: 0.36, 0.36, 0.36, 1
+            font_size: "12sp"
+            halign: "left"
+            valign: "top"
+            text_size: self.size
+
+    Label:
+        text: ">"
+        color: 0.28, 0.28, 0.28, 1
+        bold: True
+        font_size: "20sp"
+        size_hint_x: None
+        width: dp(18)
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+
+
 <LoginScreen>:
     login_input: login_input
     password_input: password_input
@@ -496,31 +566,218 @@
                 pos: self.pos
                 size: self.size
 
-        SecondaryButton:
-            text: "Назад"
-            size_hint_x: None
-            width: dp(92)
-            on_release: root.goto_home()
+        BoxLayout:
+            size_hint_y: None
+            height: dp(44)
 
-        ScreenTitle:
-            text: "ВОЕНТОРГ"
+            SecondaryButton:
+                text: "Назад"
+                size_hint_x: None
+                width: dp(92)
+                on_release: root.goto_home()
+
+            Label:
+                text: "Военторг"
+                color: 0.04, 0.04, 0.04, 1
+                bold: True
+                font_size: "26sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+
+            Widget:
+                size_hint_x: None
+                width: dp(92)
 
         ScreenSubtitle:
-            text: "Заказы, статусы и карточки шевронов"
+            text: "Заказы, одежда, снаряжение и шевроны"
+            halign: "center"
+            text_size: self.size
 
-        BoxLayout:
-            id: voentorg_cards
-            orientation: "vertical"
-            spacing: dp(10)
-            size_hint_y: None
-            height: self.minimum_height
+        RecycleView:
+            id: voentorg_list
+            viewclass: "NavListRow"
+            scroll_type: ["bars", "content"]
+            bar_width: dp(4)
+
+            RecycleBoxLayout:
+                default_size: None, dp(68)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
+                spacing: dp(10)
 
         Widget:
 
         FinePrint:
-            text: "Раздел подготовлен в едином стиле. API заказов подключается отдельным этапом."
+            text: root.status_text
+            color: 0.34, 0.34, 0.34, 1
+            size_hint_y: None
+            height: dp(28)
+
+
+<ChevronOrderScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(18), dp(22)
+        spacing: dp(12)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(44)
+
+            SecondaryButton:
+                text: "Назад"
+                size_hint_x: None
+                width: dp(92)
+                on_release: root.goto_voentorg()
+
+            Label:
+                text: "Заказ шевронов"
+                color: 0.04, 0.04, 0.04, 1
+                bold: True
+                font_size: "22sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+
+            Widget:
+                size_hint_x: None
+                width: dp(92)
+
+        BoxLayout:
             size_hint_y: None
             height: dp(42)
+            spacing: dp(6)
+
+            Button:
+                text: "Комплекты"
+                background_normal: ""
+                background_down: ""
+                background_color: (0.45, 0.50, 0.30, 1) if root.active_tab == "kits" else (1, 1, 1, 1)
+                color: (1, 1, 1, 1) if root.active_tab == "kits" else (0.05, 0.05, 0.05, 1)
+                bold: True
+                font_size: "12sp"
+                on_release: root.select_tab("kits")
+
+            Button:
+                text: "Штучные"
+                background_normal: ""
+                background_down: ""
+                background_color: (0.45, 0.50, 0.30, 1) if root.active_tab == "single" else (1, 1, 1, 1)
+                color: (1, 1, 1, 1) if root.active_tab == "single" else (0.05, 0.05, 0.05, 1)
+                bold: True
+                font_size: "12sp"
+                on_release: root.select_tab("single")
+
+            Button:
+                text: "По фото"
+                background_normal: ""
+                background_down: ""
+                background_color: (0.45, 0.50, 0.30, 1) if root.active_tab == "photo" else (1, 1, 1, 1)
+                color: (1, 1, 1, 1) if root.active_tab == "photo" else (0.05, 0.05, 0.05, 1)
+                bold: True
+                font_size: "12sp"
+                on_release: root.select_tab("photo")
+
+        RecycleView:
+            id: chevron_kits_list
+            viewclass: "NavListRow"
+            scroll_type: ["bars", "content"]
+            bar_width: dp(4)
+
+            RecycleBoxLayout:
+                default_size: None, dp(68)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
+                spacing: dp(10)
+
+        FinePrint:
+            text: root.status_text
+            color: 0.34, 0.34, 0.34, 1
+            size_hint_y: None
+            height: dp(30)
+
+
+<ChevronKitDetailScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(18), dp(22)
+        spacing: dp(12)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(44)
+
+            SecondaryButton:
+                text: "Назад"
+                size_hint_x: None
+                width: dp(92)
+                on_release: root.goto_chevrons()
+
+            Label:
+                text: root.kit_title
+                color: 0.04, 0.04, 0.04, 1
+                bold: True
+                font_size: "22sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+
+            Widget:
+                size_hint_x: None
+                width: dp(92)
+
+        ScreenSubtitle:
+            text: "Состав комплекта с сайта"
+
+        RecycleView:
+            id: kit_items_list
+            viewclass: "NavListRow"
+            scroll_type: ["bars", "content"]
+            bar_width: dp(4)
+
+            RecycleBoxLayout:
+                default_size: None, dp(68)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
+                spacing: dp(10)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(52)
+            spacing: dp(8)
+
+            SecondaryButton:
+                text: "Другой дизайн"
+                on_release: root.choose_other()
+
+            PrimaryButton:
+                text: "Далее"
+                on_release: root.next_step()
+
+        FinePrint:
+            text: root.status_text
+            color: 0.34, 0.34, 0.34, 1
+            size_hint_y: None
+            height: dp(30)
 
 
 <EmployeePanelScreen>:
