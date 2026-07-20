@@ -467,6 +467,97 @@
         on_release: root.remove_line()
 
 
+<ChevronOrderListRow>:
+    orientation: "horizontal"
+    spacing: dp(10)
+    padding: dp(12), dp(10)
+    size_hint_y: None
+    height: dp(104)
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+        Color:
+            rgba: 0.82, 0.82, 0.80, 1
+        Line:
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
+            width: 1
+
+    BoxLayout:
+        orientation: "vertical"
+        spacing: dp(4)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(24)
+
+            Label:
+                text: root.order_number
+                color: 0.04, 0.04, 0.04, 1
+                bold: True
+                font_size: "15sp"
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+
+            Label:
+                text: root.status_text
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "10sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+                size_hint_x: None
+                width: dp(92)
+                canvas.before:
+                    Color:
+                        rgba: root.status_color
+                    RoundedRectangle:
+                        pos: self.pos
+                        size: self.size
+                        radius: [dp(6)]
+
+        Label:
+            text: root.kit_title
+            color: 0.08, 0.08, 0.08, 1
+            bold: True
+            font_size: "14sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+
+        Label:
+            text: root.meta
+            color: 0.38, 0.38, 0.38, 1
+            font_size: "12sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+
+        Label:
+            text: root.price_text
+            color: 0.20, 0.20, 0.20, 1
+            font_size: "12sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
+
+    Label:
+        text: ">"
+        color: 0.20, 0.20, 0.20, 1
+        bold: True
+        font_size: "20sp"
+        size_hint_x: None
+        width: dp(18)
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
+
+
 <LoginScreen>:
     login_input: login_input
     password_input: password_input
@@ -843,6 +934,249 @@
             color: 0.34, 0.34, 0.34, 1
             size_hint_y: None
             height: dp(28)
+
+
+<ChevronOrdersScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(18), dp(22)
+        spacing: dp(10)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(44)
+
+            SecondaryButton:
+                text: "Назад"
+                size_hint_x: None
+                width: dp(92)
+                on_release: root.goto_voentorg()
+
+            Label:
+                text: "Мои заказы"
+                color: 0.04, 0.04, 0.04, 1
+                bold: True
+                font_size: "25sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+
+            SecondaryButton:
+                text: "Обновить"
+                size_hint_x: None
+                width: dp(104)
+                on_release: root.load_orders()
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(42)
+            spacing: dp(6)
+
+            Button:
+                text: "Все"
+                background_normal: ""
+                background_down: ""
+                bold: True
+                font_size: "12sp"
+                background_color: (0.04, 0.04, 0.04, 1) if root.active_status == "" else (0.86, 0.86, 0.84, 1)
+                color: (1, 1, 1, 1) if root.active_status == "" else (0.08, 0.08, 0.08, 1)
+                on_release: root.select_status("")
+
+            Button:
+                text: "Черновики"
+                background_normal: ""
+                background_down: ""
+                bold: True
+                font_size: "12sp"
+                background_color: (0.04, 0.04, 0.04, 1) if root.active_status == "DRAFT" else (0.86, 0.86, 0.84, 1)
+                color: (1, 1, 1, 1) if root.active_status == "DRAFT" else (0.08, 0.08, 0.08, 1)
+                on_release: root.select_status("DRAFT")
+
+            Button:
+                text: "В работе"
+                background_normal: ""
+                background_down: ""
+                bold: True
+                font_size: "12sp"
+                background_color: (0.04, 0.04, 0.04, 1) if root.active_status == "IN_WORK" else (0.86, 0.86, 0.84, 1)
+                color: (1, 1, 1, 1) if root.active_status == "IN_WORK" else (0.08, 0.08, 0.08, 1)
+                on_release: root.select_status("IN_WORK")
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(42)
+            spacing: dp(6)
+
+            Button:
+                text: "Готовые"
+                background_normal: ""
+                background_down: ""
+                bold: True
+                font_size: "12sp"
+                background_color: (0.04, 0.04, 0.04, 1) if root.active_status == "READY" else (0.86, 0.86, 0.84, 1)
+                color: (1, 1, 1, 1) if root.active_status == "READY" else (0.08, 0.08, 0.08, 1)
+                on_release: root.select_status("READY")
+
+            Button:
+                text: "Завершённые"
+                background_normal: ""
+                background_down: ""
+                bold: True
+                font_size: "12sp"
+                background_color: (0.04, 0.04, 0.04, 1) if root.active_status == "COMPLETED" else (0.86, 0.86, 0.84, 1)
+                color: (1, 1, 1, 1) if root.active_status == "COMPLETED" else (0.08, 0.08, 0.08, 1)
+                on_release: root.select_status("COMPLETED")
+
+        RecycleView:
+            id: orders_list
+            viewclass: "ChevronOrderListRow"
+            scroll_type: ["bars", "content"]
+            bar_width: dp(4)
+
+            RecycleBoxLayout:
+                default_size: None, dp(104)
+                default_size_hint: 1, None
+                size_hint_y: None
+                height: self.minimum_height
+                orientation: "vertical"
+                spacing: dp(8)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(42)
+            spacing: dp(8)
+
+            FinePrint:
+                text: "Загрузка..." if root.loading else root.status_text
+                color: 0.34, 0.34, 0.34, 1
+
+            SecondaryButton:
+                text: "Ещё"
+                size_hint_x: None
+                width: dp(82)
+                disabled: root.loading or not root.has_more
+                on_release: root.load_more()
+
+
+<ChevronOrderDetailScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(18), dp(22)
+        spacing: dp(10)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(44)
+
+            SecondaryButton:
+                text: "Назад"
+                size_hint_x: None
+                width: dp(92)
+                on_release: root.goto_orders()
+
+            Label:
+                text: root.title_text
+                color: 0.04, 0.04, 0.04, 1
+                bold: True
+                font_size: "21sp"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+
+            SecondaryButton:
+                text: "Обновить"
+                size_hint_x: None
+                width: dp(104)
+                on_release: root.load_detail()
+
+        ScrollView:
+            bar_width: dp(4)
+
+            BoxLayout:
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: dp(10)
+
+                CardBox:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: dp(116)
+
+                    SectionLabel:
+                        text: root.status_text
+
+                    FinePrint:
+                        text: root.kit_text
+                        color: 0.28, 0.28, 0.28, 1
+
+                CardBox:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: dp(148)
+
+                    SectionLabel:
+                        text: "Параметры"
+
+                    FinePrint:
+                        text: root.config_text
+                        color: 0.28, 0.28, 0.28, 1
+
+                CardBox:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: dp(136)
+
+                    SectionLabel:
+                        text: "Фамилии / позывные"
+
+                    FinePrint:
+                        text: root.lines_text
+                        color: 0.28, 0.28, 0.28, 1
+
+                CardBox:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: dp(112)
+
+                    SectionLabel:
+                        text: root.price_text
+
+                    FinePrint:
+                        text: root.payment_text
+                        color: 0.28, 0.28, 0.28, 1
+
+        FinePrint:
+            text: "Загрузка..." if root.loading else root.error_text
+            color: 0.34, 0.34, 0.34, 1
+            size_hint_y: None
+            height: dp(28)
+
+        Button:
+            text: "Продолжить оформление"
+            background_normal: ""
+            background_down: ""
+            background_color: 0.20, 0.42, 0.78, 1
+            color: 1, 1, 1, 1
+            bold: True
+            font_size: "15sp"
+            size_hint_y: None
+            height: dp(50)
+            opacity: 1 if root.is_draft else 0
+            disabled: root.loading or not root.is_draft
+            on_release: root.continue_draft()
 
 
 <ChevronOrderScreen>:

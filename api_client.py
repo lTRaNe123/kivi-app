@@ -39,6 +39,8 @@ class ApiClient:
       /api/chevron_kit_detail.php
       /api/chevron_quote.php
       /api/chevron_order_create.php
+      /api/chevron_orders.php
+      /api/chevron_order_detail.php
     """
 
     def __init__(self, base_url: str):
@@ -445,6 +447,45 @@ class ApiClient:
                 "status": "DRAFT",
                 "idempotency_key": idempotency_key,
             },
+        )
+        if not isinstance(payload.get("order") or {}, dict):
+            raise ApiError("API заказа не вернул order")
+        return payload
+
+    def get_chevron_orders(
+        self,
+        status: str = "",
+        page: int = 1,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        """
+        GET /api/chevron_orders.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        params = {
+            "page": page,
+            "limit": limit,
+        }
+        if status:
+            params["status"] = status
+        payload = self._request_json("GET", "chevron_orders.php", params=params)
+        if not isinstance(payload.get("orders") or [], list):
+            raise ApiError("API заказов не вернул orders")
+        return payload
+
+    def get_chevron_order_detail(self, order_id: int) -> Dict[str, Any]:
+        """
+        GET /api/chevron_order_detail.php?id=...
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json(
+            "GET",
+            "chevron_order_detail.php",
+            params={"id": order_id},
         )
         if not isinstance(payload.get("order") or {}, dict):
             raise ApiError("API заказа не вернул order")

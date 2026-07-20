@@ -79,6 +79,48 @@ def make_table_label(text: str, width: int) -> Label:
     return lbl
 
 
+CHEVRON_STATUS_LABELS = {
+    "DRAFT": "Черновик",
+    "WAITING_PAYMENT": "Ожидает оплаты",
+    "PAID": "Оплачен",
+    "IN_WORK": "В работе",
+    "READY": "Готов",
+    "DELIVERING": "Доставляется",
+    "COMPLETED": "Завершён",
+    "CANCELLED": "Отменён",
+}
+
+CHEVRON_STATUS_COLORS = {
+    "DRAFT": [0.58, 0.58, 0.58, 1],
+    "WAITING_PAYMENT": [0.86, 0.56, 0.20, 1],
+    "PAID": [0.16, 0.48, 0.78, 1],
+    "IN_WORK": [0.20, 0.42, 0.78, 1],
+    "READY": [0.20, 0.55, 0.32, 1],
+    "DELIVERING": [0.40, 0.34, 0.68, 1],
+    "COMPLETED": [0.12, 0.44, 0.26, 1],
+    "CANCELLED": [0.70, 0.20, 0.20, 1],
+}
+
+
+def chevron_status_label(status):
+    return CHEVRON_STATUS_LABELS.get(status or "", status or "Неизвестно")
+
+
+def chevron_status_color(status):
+    return CHEVRON_STATUS_COLORS.get(status or "", [0.42, 0.42, 0.42, 1])
+
+
+def chevron_price_text(payload):
+    if not payload.get("price_available"):
+        return "Стоимость не назначена"
+    parts = []
+    if payload.get("total_rub") is not None:
+        parts.append(f"{payload.get('total_rub')} ₽")
+    if payload.get("total_st") is not None:
+        parts.append(f"{payload.get('total_st')} ST")
+    return " / ".join(parts) if parts else "Стоимость не назначена"
+
+
 class FinanceTableRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
     cells = ListProperty([])
     row_data = ObjectProperty({})
@@ -211,6 +253,33 @@ class ChevronNameLineRow(RecycleDataViewBehavior, BoxLayout):
         screen = self._screen()
         if hasattr(screen, "change_quantity"):
             screen.change_quantity(self.line_index, delta)
+
+
+class ChevronOrderListRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
+    order_id = NumericProperty(0)
+    order_number = StringProperty("")
+    kit_title = StringProperty("")
+    meta = StringProperty("")
+    price_text = StringProperty("")
+    status_text = StringProperty("")
+    status_color = ListProperty([0.55, 0.55, 0.55, 1])
+
+    def refresh_view_attrs(self, rv, index, data):
+        result = super().refresh_view_attrs(rv, index, data)
+        self.order_id = int(data.get("order_id") or 0)
+        self.order_number = data.get("order_number") or ""
+        self.kit_title = data.get("kit_title") or ""
+        self.meta = data.get("meta") or ""
+        self.price_text = data.get("price_text") or ""
+        self.status_text = data.get("status_text") or ""
+        self.status_color = data.get("status_color") or [0.55, 0.55, 0.55, 1]
+        return result
+
+    def on_release(self):
+        app = App.get_running_app()
+        screen = app.root.current_screen
+        if hasattr(screen, "open_order"):
+            screen.open_order(self.order_id)
 
 
 def fill_cards(container, items):
@@ -1167,12 +1236,285 @@ class VoentorgScreen(Screen):
             self.manager.current = "chevron_order"
             return
         if action == "orders":
-            self.status_text = "Мои заказы будут подключены в третьем коммите."
+            self.manager.current = "chevron_orders"
             return
         self.status_text = "Раздел будет подключен отдельной веткой Военторга."
 
     def goto_home(self):
         self.manager.current = "user_home"
+
+
+class ChevronOrdersScreen(Screen):
+    status_text = StringProperty("")
+    active_status = StringProperty("")
+    loading = BooleanProperty(False)
+    page = NumericProperty(1)
+    has_more = BooleanProperty(False)
+
+    FILTERS = [
+        ("", "Все"),
+        ("DRAFT", "Черновики"),
+        ("IN_WORK", "В работе"),
+        ("READY", "Готовые"),
+        ("COMPLETED", "Завершённые"),
+    ]
+
+    def on_pre_enter(self, *args):
+        if not self.ids.orders_list.data:
+            self.load_orders()
+
+    def select_status(self, status):
+        self.active_status = status
+        self.page = 1
+        self.load_orders()
+
+    def load_orders(self):
+        self.loading = True
+        self.status_text = "Загружаем заказы..."
+        self.ids.orders_list.data = []
+
+        def worker():
+            try:
+                data = api_client.get_chevron_orders(self.active_status, page=1, limit=20)
+            except Exception as exc:
+                msg = f"Ошибка заказов: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                orders = data.get("orders") or []
+                pagination = data.get("pagination") or {}
+                self.page = int(pagination.get("page") or 1)
+                self.has_more = bool(pagination.get("has_more"))
+                self.ids.orders_list.data = [self._row_payload(order) for order in orders]
+                self.status_text = "" if orders else "Заказов пока нет."
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def load_more(self):
+        if self.loading or not self.has_more:
+            return
+        next_page = int(self.page) + 1
+        self.loading = True
+        self.status_text = "Загружаем ещё..."
+
+        def worker():
+            try:
+                data = api_client.get_chevron_orders(self.active_status, page=next_page, limit=20)
+            except Exception as exc:
+                msg = f"Ошибка заказов: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                orders = data.get("orders") or []
+                pagination = data.get("pagination") or {}
+                self.page = int(pagination.get("page") or next_page)
+                self.has_more = bool(pagination.get("has_more"))
+                self.ids.orders_list.data = list(self.ids.orders_list.data) + [
+                    self._row_payload(order) for order in orders
+                ]
+                self.status_text = ""
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _row_payload(self, order):
+        created = (order.get("created_at") or "").split(" ")[0]
+        lines_count = int(order.get("lines_count") or 0)
+        return {
+            "order_id": int(order.get("id") or 0),
+            "order_number": order.get("order_number") or "",
+            "kit_title": order.get("kit_title") or "",
+            "meta": f"{created} · строк: {lines_count}",
+            "price_text": chevron_price_text(order),
+            "status_text": chevron_status_label(order.get("status")),
+            "status_color": chevron_status_color(order.get("status")),
+        }
+
+    def open_order(self, order_id):
+        detail = self.manager.get_screen("chevron_order_detail")
+        detail.open_order(order_id)
+        self.manager.current = "chevron_order_detail"
+
+    def goto_voentorg(self):
+        self.manager.current = "voentorg"
+
+
+class ChevronOrderDetailScreen(Screen):
+    order_id = NumericProperty(0)
+    title_text = StringProperty("Заказ")
+    status_text = StringProperty("")
+    kit_text = StringProperty("")
+    config_text = StringProperty("")
+    lines_text = StringProperty("")
+    payment_text = StringProperty("Способ оплаты: не выбран")
+    price_text = StringProperty("Стоимость не назначена")
+    error_text = StringProperty("")
+    loading = BooleanProperty(False)
+    is_draft = BooleanProperty(False)
+    detail = ObjectProperty({})
+
+    def open_order(self, order_id):
+        self.order_id = int(order_id or 0)
+        self.load_detail()
+
+    def load_detail(self):
+        if not self.order_id:
+            self.error_text = "Заказ не выбран"
+            return
+        self.loading = True
+        self.error_text = "Загружаем заказ..."
+
+        def worker():
+            try:
+                data = api_client.get_chevron_order_detail(self.order_id)
+            except Exception as exc:
+                msg = f"Ошибка заказа: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.error_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                self.detail = data
+                self._render_detail(data)
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _render_detail(self, data):
+        order = data.get("order") or {}
+        kit = data.get("kit") or {}
+        options = data.get("options") or []
+        lines = data.get("lines") or []
+        status = order.get("status")
+        self.title_text = order.get("order_number") or "Заказ"
+        self.status_text = f"Статус: {chevron_status_label(status)}"
+        created = order.get("created_at") or ""
+        self.kit_text = f"Дата: {created}\nКомплект: {kit.get('title') or ''}"
+        self.config_text = "\n".join(
+            f"{option.get('group_title')}: {option.get('title')}" for option in options
+        ) or "Параметры не найдены"
+        self.lines_text = "\n".join(
+            f"{line.get('text_value')} × {line.get('quantity')}" for line in lines
+        ) or "Строки не найдены"
+        self.payment_text = "Способ оплаты: " + (order.get("payment_method") or "не выбран")
+        self.price_text = chevron_price_text(order)
+        self.is_draft = status == "DRAFT"
+        self.error_text = ""
+
+    def continue_draft(self):
+        if not self.is_draft or not self.detail:
+            return
+        order = self.detail.get("order") or {}
+        kit = self.detail.get("kit") or {}
+        config = order.get("configuration") or {}
+        kit_code = config.get("kit_code") or kit.get("code") or ""
+        option_tokens = config.get("option_codes") or []
+        lines = config.get("lines") or self.detail.get("lines") or []
+        self.loading = True
+        self.error_text = "Восстанавливаем черновик..."
+
+        def worker():
+            try:
+                kit_detail = api_client.get_chevron_kit_detail(kit_code)
+                quote_payload = api_client.create_chevron_quote(kit_code, option_tokens, lines)
+            except Exception as exc:
+                msg = f"Ошибка восстановления: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.error_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, kit_detail=kit_detail, quote_payload=quote_payload):
+                self.loading = False
+                selected_options = self._selected_from_tokens(option_tokens)
+                configurator = self.manager.get_screen("chevron_configurator")
+                configurator.kit_code = kit_code
+                configurator.kit_title = kit.get("title") or kit_detail.get("kit", {}).get("title") or "Комплект"
+                configurator.kit_detail = kit_detail
+                configurator.selected_options = selected_options
+                configurator.price_available = bool(kit_detail.get("kit", {}).get("price_available"))
+                configurator._render()
+
+                names = self.manager.get_screen("chevron_names_draft")
+                names.set_config(
+                    configurator.kit_title,
+                    kit_code,
+                    kit_detail,
+                    selected_options,
+                    configurator.price_available,
+                    configurator.price_text,
+                )
+                names.name_lines = [
+                    {
+                        "text_value": line.get("text_value") or "",
+                        "quantity": int(line.get("quantity") or 1),
+                    }
+                    for line in lines
+                ]
+                names._render_lines()
+
+                confirm = self.manager.get_screen("chevron_quote_confirm")
+                confirm.set_quote(
+                    configurator.kit_title,
+                    kit_code,
+                    names.summary_text,
+                    option_tokens,
+                    names.name_lines,
+                    quote_payload,
+                )
+                order = self.detail.get("order") or {}
+                confirm.saved = True
+                confirm.save_button_text = "Черновик сохранён"
+                confirm.draft_status_text = f"Черновик восстановлен. Номер заказа: {order.get('order_number') or ''}"
+                self.manager.current = "chevron_quote_confirm"
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _selected_from_tokens(self, tokens):
+        selected = {}
+        for token in tokens or []:
+            if ":" not in str(token):
+                continue
+            group_code, option_code = str(token).split(":", 1)
+            current = selected.get(group_code)
+            if current is None:
+                selected[group_code] = option_code
+            elif isinstance(current, list):
+                current.append(option_code)
+            else:
+                selected[group_code] = [current, option_code]
+        return selected
+
+    def goto_orders(self):
+        self.manager.current = "chevron_orders"
 
 
 class ChevronOrderScreen(Screen):
@@ -1911,6 +2253,8 @@ class SixnerInventoryApp(App):
         sm.add_widget(UserHomeScreen(name="user_home"))
         sm.add_widget(FinanceAccountScreen(name="finance_account"))
         sm.add_widget(VoentorgScreen(name="voentorg"))
+        sm.add_widget(ChevronOrdersScreen(name="chevron_orders"))
+        sm.add_widget(ChevronOrderDetailScreen(name="chevron_order_detail"))
         sm.add_widget(ChevronOrderScreen(name="chevron_order"))
         sm.add_widget(ChevronKitDetailScreen(name="chevron_kit_detail"))
         sm.add_widget(ChevronConfiguratorScreen(name="chevron_configurator"))
