@@ -38,6 +38,7 @@ class ApiClient:
       /api/chevron_kits.php
       /api/chevron_kit_detail.php
       /api/chevron_quote.php
+      /api/chevron_order_create.php
     """
 
     def __init__(self, base_url: str):
@@ -418,6 +419,35 @@ class ApiClient:
         )
         if not isinstance(payload.get("quote") or {}, dict):
             raise ApiError("API расчёта не вернул quote")
+        return payload
+
+    def create_chevron_draft_order(
+        self,
+        kit_code: str,
+        option_codes: List[str],
+        lines: List[Dict[str, Any]],
+        idempotency_key: str,
+    ) -> Dict[str, Any]:
+        """
+        POST /api/chevron_order_create.php
+        Создаёт или возвращает DRAFT-заказ по idempotency_key.
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json(
+            "POST",
+            "chevron_order_create.php",
+            data={
+                "kit_code": kit_code,
+                "option_codes": json.dumps(option_codes, ensure_ascii=False),
+                "lines": json.dumps(lines, ensure_ascii=False),
+                "status": "DRAFT",
+                "idempotency_key": idempotency_key,
+            },
+        )
+        if not isinstance(payload.get("order") or {}, dict):
+            raise ApiError("API заказа не вернул order")
         return payload
 
 

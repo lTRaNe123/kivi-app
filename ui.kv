@@ -1358,6 +1358,29 @@
             size_hint_y: None
             height: dp(52)
 
+        Label:
+            text: root.draft_status_text
+            color: 0.78, 0.90, 0.82, 1
+            font_size: "12sp"
+            halign: "center"
+            valign: "middle"
+            text_size: self.size
+            size_hint_y: None
+            height: dp(42)
+
+        Button:
+            text: root.save_button_text
+            background_normal: ""
+            background_down: ""
+            background_color: (0.11, 0.30, 0.20, 1) if root.saved else (0.20, 0.42, 0.78, 1)
+            color: 1, 1, 1, 1
+            bold: True
+            font_size: "15sp"
+            size_hint_y: None
+            height: dp(50)
+            disabled: root.saving or root.saved
+            on_release: root.save_draft()
+
 
 <EmployeePanelScreen>:
     BoxLayout:

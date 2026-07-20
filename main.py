@@ -1,5 +1,6 @@
 # main.py
 import threading
+import uuid
 from collections import defaultdict
 
 from kivy.app import App
@@ -1765,7 +1766,14 @@ class ChevronNamesDraftScreen(Screen):
             def ui_ok(dt, data=data):
                 self.loading = False
                 confirm = self.manager.get_screen("chevron_quote_confirm")
-                confirm.set_quote(self.kit_title, self.summary_text, lines, data)
+                confirm.set_quote(
+                    self.kit_title,
+                    self.kit_code,
+                    self.summary_text,
+                    option_codes,
+                    lines,
+                    data,
+                )
                 self.manager.current = "chevron_quote_confirm"
 
             Clock.schedule_once(ui_ok)
@@ -1790,14 +1798,30 @@ class ChevronQuoteConfirmScreen(Screen):
     summary_text = StringProperty("")
     lines_text = StringProperty("")
     price_text = StringProperty("Стоимость пока не назначена")
+    draft_status_text = StringProperty("")
+    save_button_text = StringProperty("Сохранить черновик")
+    saving = BooleanProperty(False)
+    saved = BooleanProperty(False)
+    kit_code = StringProperty("")
+    option_codes = ListProperty([])
+    order_lines = ListProperty([])
+    idempotency_key = StringProperty("")
 
-    def set_quote(self, kit_title, summary_text, lines, quote_payload):
+    def set_quote(self, kit_title, kit_code, summary_text, option_codes, lines, quote_payload):
         quote = (quote_payload or {}).get("quote") or {}
         self.title_text = f"Подтверждение: {kit_title}"
+        self.kit_code = kit_code
+        self.option_codes = list(option_codes or [])
+        self.order_lines = list(lines or [])
         self.summary_text = summary_text or ""
         self.lines_text = "\n".join(
             f"{line.get('text_value')} × {line.get('quantity')}" for line in lines
         )
+        self.idempotency_key = uuid.uuid4().hex
+        self.saved = False
+        self.saving = False
+        self.save_button_text = "Сохранить черновик"
+        self.draft_status_text = ""
         if quote.get("price_available"):
             rub = quote.get("total_price_rub")
             st = quote.get("total_price_st")
@@ -1812,6 +1836,44 @@ class ChevronQuoteConfirmScreen(Screen):
 
     def goto_names(self):
         self.manager.current = "chevron_names_draft"
+
+    def save_draft(self):
+        if self.saving or self.saved:
+            return
+        self.saving = True
+        self.save_button_text = "Сохраняем..."
+        self.draft_status_text = ""
+
+        def worker():
+            try:
+                data = api_client.create_chevron_draft_order(
+                    self.kit_code,
+                    list(self.option_codes),
+                    list(self.order_lines),
+                    self.idempotency_key,
+                )
+            except Exception as exc:
+                msg = f"Не удалось сохранить черновик: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.saving = False
+                    self.save_button_text = "Повторить"
+                    self.draft_status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                order = data.get("order") or {}
+                number = order.get("order_number") or "без номера"
+                self.saving = False
+                self.saved = True
+                self.save_button_text = "Черновик сохранён"
+                self.draft_status_text = f"Черновик сохранён. Номер заказа: {number}"
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
 
 
 class EmployeePanelScreen(Screen):
