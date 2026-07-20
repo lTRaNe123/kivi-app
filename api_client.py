@@ -46,6 +46,8 @@ class ApiClient:
       /api/employee_profile.php
       /api/employee_orders.php
       /api/employee_order_detail.php
+      /api/employee_order_claim.php
+      /api/employee_order_complete.php
     """
 
     def __init__(self, base_url: str):
@@ -583,6 +585,7 @@ class ApiClient:
         role: str,
         query: str = "",
         stage: str = "",
+        queue: str = "new",
         page: int = 1,
         limit: int = 20,
     ) -> Dict[str, Any]:
@@ -594,6 +597,7 @@ class ApiClient:
 
         params = {
             "role": role,
+            "queue": queue,
             "page": page,
             "limit": limit,
         }
@@ -621,6 +625,47 @@ class ApiClient:
         if not isinstance(payload.get("order") or {}, dict):
             raise ApiError("API рабочего заказа не вернул order")
         return payload
+
+    def claim_employee_order(self, order_id: int, role: str, idempotency_key: str) -> Dict[str, Any]:
+        """
+        POST /api/employee_order_claim.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        return self._request_json(
+            "POST",
+            "employee_order_claim.php",
+            data={
+                "order_id": int(order_id),
+                "role": role,
+                "idempotency_key": idempotency_key,
+            },
+        )
+
+    def complete_employee_order(
+        self,
+        order_id: int,
+        role: str,
+        comment: str,
+        idempotency_key: str,
+    ) -> Dict[str, Any]:
+        """
+        POST /api/employee_order_complete.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        return self._request_json(
+            "POST",
+            "employee_order_complete.php",
+            data={
+                "order_id": int(order_id),
+                "role": role,
+                "comment": comment or "",
+                "idempotency_key": idempotency_key,
+            },
+        )
 
 
 # ----- ГЛОБАЛЬНЫЙ КЛИЕНТ ДЛЯ main.py -----

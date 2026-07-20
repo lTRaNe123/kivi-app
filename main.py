@@ -109,6 +109,12 @@ EMPLOYEE_STAGE_LABELS = {
     "COMPLETED": "Завершён",
 }
 
+EMPLOYEE_QUEUE_LABELS = {
+    "new": "Новые",
+    "mine": "Мои в работе",
+    "completed": "Завершённые мной",
+}
+
 
 def chevron_status_label(status):
     return CHEVRON_STATUS_LABELS.get(status or "", status or "Неизвестно")
@@ -2517,6 +2523,7 @@ class EmployeeOrdersScreen(Screen):
     role_title = StringProperty("Очередь")
     status_text = StringProperty("")
     query_text = StringProperty("")
+    queue_mode = StringProperty("new")
     loading = BooleanProperty(False)
     page = NumericProperty(1)
     has_more = BooleanProperty(False)
@@ -2525,9 +2532,17 @@ class EmployeeOrdersScreen(Screen):
         self.role_code = role.get("code") or ""
         self.role_title = role.get("title") or "Очередь"
         self.query_text = ""
+        self.queue_mode = "new"
         self.page = 1
         self.ids.employee_search.text = ""
         self.ids.employee_orders_list.data = []
+        self.load_orders()
+
+    def set_queue_mode(self, mode):
+        if mode not in EMPLOYEE_QUEUE_LABELS:
+            return
+        self.queue_mode = mode
+        self.page = 1
         self.load_orders()
 
     def load_orders(self):
@@ -2535,14 +2550,15 @@ class EmployeeOrdersScreen(Screen):
             self.status_text = "Роль не выбрана"
             return
         self.loading = True
-        self.status_text = "Загружаем очередь..."
+        self.status_text = f"Загружаем: {EMPLOYEE_QUEUE_LABELS.get(self.queue_mode, 'Очередь')}..."
         self.ids.employee_orders_list.data = []
         query = (self.ids.employee_search.text or "").strip()
         self.query_text = query
+        queue = self.queue_mode
 
         def worker():
             try:
-                data = api_client.get_employee_orders(self.role_code, query=query, page=1, limit=20)
+                data = api_client.get_employee_orders(self.role_code, query=query, queue=queue, page=1, limit=20)
             except Exception as exc:
                 msg = f"Ошибка очереди: {exc}"
 
@@ -2560,7 +2576,7 @@ class EmployeeOrdersScreen(Screen):
                 self.page = int(pagination.get("page") or 1)
                 self.has_more = bool(pagination.get("has_more"))
                 self.ids.employee_orders_list.data = [self._row_payload(order) for order in orders]
-                self.status_text = "" if orders else "Очередь пуста."
+                self.status_text = "" if orders else "В этой вкладке заказов нет."
 
             Clock.schedule_once(ui_ok)
 
@@ -2571,12 +2587,13 @@ class EmployeeOrdersScreen(Screen):
             return
         next_page = int(self.page) + 1
         query = (self.ids.employee_search.text or "").strip()
+        queue = self.queue_mode
         self.loading = True
         self.status_text = "Загружаем ещё..."
 
         def worker():
             try:
-                data = api_client.get_employee_orders(self.role_code, query=query, page=next_page, limit=20)
+                data = api_client.get_employee_orders(self.role_code, query=query, queue=queue, page=next_page, limit=20)
             except Exception as exc:
                 msg = f"Ошибка очереди: {exc}"
 
@@ -2622,6 +2639,9 @@ class EmployeeOrdersScreen(Screen):
         detail.open_order(order_id, self.role_code, self.role_title)
         self.manager.current = "employee_order_detail"
 
+    def refresh_after_action(self):
+        self.load_orders()
+
     def goto_employee(self):
         self.manager.current = "employee_panel"
 
@@ -2638,6 +2658,11 @@ class EmployeeOrderDetailScreen(Screen):
     comment_text = StringProperty("Комментарий клиента: нет")
     history_text = StringProperty("")
     test_text = StringProperty("")
+    action_text = StringProperty("")
+    action_hint = StringProperty("")
+    action_enabled = BooleanProperty(False)
+    action_loading = BooleanProperty(False)
+    action_mode = StringProperty("")
     loading = BooleanProperty(False)
     error_text = StringProperty("")
 
@@ -2653,6 +2678,8 @@ class EmployeeOrderDetailScreen(Screen):
             return
         self.loading = True
         self.error_text = "Загружаем заказ..."
+        self.action_enabled = False
+        self.action_mode = ""
 
         def worker():
             try:
@@ -2694,11 +2721,138 @@ class EmployeeOrderDetailScreen(Screen):
         ) or "Строки не найдены"
         self.comment_text = "Комментарий клиента: " + (order.get("client_comment") or "нет")
         self.history_text = "\n".join(
-            f"{item.get('created_at')} · {item.get('stage_title')} · {item.get('action')}"
+            " · ".join(
+                part for part in [
+                    item.get("created_at") or "",
+                    item.get("stage_title") or "",
+                    item.get("action") or "",
+                    item.get("employee_name") or "",
+                    item.get("comment") or "",
+                ] if part
+            )
             for item in history
         ) or "История пуста"
         self.test_text = "Тестовый заказ" if order.get("is_test") else "Production"
+        if workflow.get("can_claim"):
+            self.action_mode = "claim"
+            self.action_text = "Взять в работу"
+            self.action_hint = ""
+            self.action_enabled = True
+        elif workflow.get("can_complete"):
+            self.action_mode = "complete"
+            self.action_text = "Завершить этап"
+            self.action_hint = ""
+            self.action_enabled = True
+        elif workflow.get("is_assigned_to_other"):
+            self.action_mode = ""
+            self.action_text = ""
+            self.action_hint = "Заказ уже в работе"
+            self.action_enabled = False
+        else:
+            self.action_mode = ""
+            self.action_text = ""
+            self.action_hint = ""
+            self.action_enabled = False
         self.error_text = ""
+
+    def run_action(self):
+        if self.action_loading or not self.action_enabled:
+            return
+        if self.action_mode == "claim":
+            self._claim_order()
+        elif self.action_mode == "complete":
+            self._confirm_complete()
+
+    def _claim_order(self):
+        self.action_loading = True
+        self.error_text = "Берём заказ в работу..."
+        key = uuid.uuid4().hex
+
+        def worker():
+            try:
+                data = api_client.claim_employee_order(self.order_id, self.role_code, key)
+            except Exception as exc:
+                msg = f"Ошибка действия: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.action_loading = False
+                    self.error_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.action_loading = False
+                self.error_text = data.get("message") or "Заказ взят в работу"
+                self._refresh_queue()
+                self.load_detail()
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _confirm_complete(self):
+        field = TextInput(
+            hint_text="Комментарий к этапу",
+            multiline=True,
+            size_hint_y=None,
+            height=dp(92),
+        )
+        content = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(10))
+        content.add_widget(Label(
+            text="Завершить текущий этап?",
+            color=(0.06, 0.06, 0.06, 1),
+            size_hint_y=None,
+            height=dp(34),
+        ))
+        content.add_widget(field)
+        buttons = BoxLayout(size_hint_y=None, height=dp(44), spacing=dp(8))
+        cancel = Button(text="Отмена")
+        submit = Button(text="Завершить")
+        buttons.add_widget(cancel)
+        buttons.add_widget(submit)
+        content.add_widget(buttons)
+        popup = Popup(title="Завершить этап", content=content, size_hint=(0.9, 0.42))
+        cancel.bind(on_release=popup.dismiss)
+        submit.bind(on_release=lambda *_: self._complete_order(popup, field.text))
+        popup.open()
+
+    def _complete_order(self, popup, comment):
+        if self.action_loading:
+            return
+        popup.dismiss()
+        self.action_loading = True
+        self.error_text = "Завершаем этап..."
+        key = uuid.uuid4().hex
+
+        def worker():
+            try:
+                data = api_client.complete_employee_order(self.order_id, self.role_code, comment, key)
+            except Exception as exc:
+                msg = f"Ошибка действия: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.action_loading = False
+                    self.error_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.action_loading = False
+                self.error_text = data.get("message") or "Этап завершён"
+                self._refresh_queue()
+                self.load_detail()
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _refresh_queue(self):
+        try:
+            self.manager.get_screen("employee_orders").refresh_after_action()
+        except Exception:
+            pass
 
     def goto_queue(self):
         self.manager.current = "employee_orders"
