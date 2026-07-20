@@ -2,224 +2,462 @@
 #:import dp kivy.metrics.dp
 
 
-<FinanceTableRow>:
+<ScreenTitle@Label>:
+    color: 0.04, 0.04, 0.04, 1
+    bold: True
+    font_size: "30sp"
+    halign: "left"
+    valign: "middle"
+    text_size: self.size
+    size_hint_y: None
+    height: dp(42)
+
+
+<ScreenSubtitle@Label>:
+    color: 0.22, 0.22, 0.22, 1
+    font_size: "14sp"
+    halign: "left"
+    valign: "top"
+    text_size: self.size
+    size_hint_y: None
+    height: dp(26)
+
+
+<FinePrint@Label>:
+    color: 0.25, 0.25, 0.25, 1
+    font_size: "12sp"
+    halign: "left"
+    valign: "middle"
+    text_size: self.size
+
+
+<CardBox@BoxLayout>:
+    padding: dp(16)
+    spacing: dp(10)
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+        Color:
+            rgba: 0.86, 0.86, 0.86, 1
+        Line:
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
+            width: 1
+
+
+<AppTextInput@TextInput>:
+    background_normal: ""
+    background_active: ""
+    background_color: 0, 0, 0, 0
+    foreground_color: 0.05, 0.05, 0.05, 1
+    hint_text_color: 0.48, 0.48, 0.48, 1
+    cursor_color: 0.05, 0.05, 0.05, 1
+    font_size: "16sp"
+    padding: dp(14), dp(13)
+    size_hint_y: None
+    height: dp(52)
     canvas.before:
         Color:
             rgba: 0.98, 0.98, 0.98, 1
-        Rectangle:
+        RoundedRectangle:
             pos: self.pos
             size: self.size
-    spacing: dp(1)
+            radius: [dp(8)]
+        Color:
+            rgba: 0.82, 0.82, 0.82, 1
+        Line:
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
+            width: 1
+
+
+<PrimaryButton@Button>:
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    color: 1, 1, 1, 1
+    bold: True
+    font_size: "16sp"
+    size_hint_y: None
+    height: dp(52)
+    canvas.before:
+        Color:
+            rgba: (0.02, 0.02, 0.02, 1) if self.state == "normal" else (0.16, 0.16, 0.16, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+
+
+<SecondaryButton@Button>:
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    color: 0.05, 0.05, 0.05, 1
+    bold: True
+    font_size: "14sp"
+    size_hint_y: None
+    height: dp(44)
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+        Color:
+            rgba: 0.82, 0.82, 0.82, 1
+        Line:
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
+            width: 1
+
+
+<MenuCard@Button>:
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    color: 0.05, 0.05, 0.05, 1
+    bold: True
+    font_size: "17sp"
+    halign: "left"
+    valign: "middle"
+    text_size: self.width - dp(32), self.height
+    padding: dp(16), 0
+    size_hint_y: None
+    height: dp(64)
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(7)]
+        Color:
+            rgba: 0.86, 0.86, 0.86, 1
+        Line:
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(7)
+            width: 1
+
+
+<SectionLabel@Label>:
+    color: 0.06, 0.06, 0.06, 1
+    bold: True
+    font_size: "16sp"
+    halign: "left"
+    valign: "middle"
+    text_size: self.size
+    size_hint_y: None
+    height: dp(28)
+
+
+<FinanceTableRow>:
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, 1
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(6)]
+        Color:
+            rgba: 0.9, 0.9, 0.9, 1
+        Line:
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(6)
+            width: 1
+    spacing: dp(4)
+    padding: dp(2)
 
 
 <LoginScreen>:
     login_input: login_input
     password_input: password_input
 
-    BoxLayout:
-        orientation: "vertical"
-        padding: dp(20)
-        spacing: dp(10)
+    FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
 
-        Label:
-            text: "Вход в систему"
-            font_size: "22sp"
-            size_hint_y: None
-            height: self.texture_size[1] + dp(10)
+        BoxLayout:
+            orientation: "vertical"
+            padding: dp(28), dp(42)
+            spacing: dp(16)
 
-        TextInput:
-            id: login_input
-            hint_text: "Логин"
-            multiline: False
+            Widget:
+                size_hint_y: 0.08
 
-        TextInput:
-            id: password_input
-            hint_text: "Пароль"
-            password: True
-            multiline: False
+            ScreenTitle:
+                text: "ВХОД"
 
-        Label:
-            text: root.message
-            color: 1, 0, 0, 1
-            size_hint_y: None
-            height: dp(40)
+            ScreenSubtitle:
+                text: "Войдите в приложение Strig"
 
-        Button:
-            text: "Войти"
-            size_hint_y: None
-            height: dp(40)
-            on_release: root.do_login()
+            CardBox:
+                orientation: "vertical"
+                size_hint_y: None
+                height: dp(244)
+
+                AppTextInput:
+                    id: login_input
+                    hint_text: "Логин"
+                    multiline: False
+
+                AppTextInput:
+                    id: password_input
+                    hint_text: "Пароль"
+                    password: True
+                    multiline: False
+
+                Label:
+                    text: root.message
+                    color: 0.72, 0.08, 0.08, 1
+                    font_size: "13sp"
+                    halign: "left"
+                    valign: "middle"
+                    text_size: self.size
+                    size_hint_y: None
+                    height: dp(28)
+
+                PrimaryButton:
+                    text: "Войти"
+                    on_release: root.do_login()
+
+            Widget:
 
 
 <UserHomeScreen>:
     BoxLayout:
         orientation: "vertical"
-        padding: dp(16)
-        spacing: dp(12)
+        padding: dp(24), dp(28)
+        spacing: dp(10)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        ScreenTitle:
+            text: "ПРИХОЖАЯ"
+
+        ScreenSubtitle:
+            text: "Главное меню приложения"
 
         Label:
             id: lbl_user_name
             text: "ФИО"
-            font_size: "18sp"
+            color: 0.12, 0.12, 0.12, 1
+            bold: True
+            font_size: "15sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
             size_hint_y: None
-            height: self.texture_size[1] + dp(6)
+            height: dp(24)
 
         Label:
             id: lbl_user_info
             text: "Звание / должность / подразделение"
+            color: 0.35, 0.35, 0.35, 1
+            font_size: "12sp"
+            halign: "left"
+            valign: "top"
+            text_size: self.size
             size_hint_y: None
-            height: dp(60)
+            height: dp(42)
 
-        Button:
-            text: "Личный кабинет"
-            font_size: "18sp"
-            size_hint_y: None
-            height: dp(64)
+        MenuCard:
+            text: "1.   Личный кабинет"
             on_release: root.goto_finance()
 
-        Button:
+        MenuCard:
             id: btn_voentorg
-            text: "Военторг"
-            font_size: "18sp"
-            size_hint_y: None
+            text: "2.   Военторг"
             height: 0 if self.disabled else dp(64)
             opacity: 0 if self.disabled else 1
             on_release: root.goto_voentorg()
 
-        Button:
+        MenuCard:
             id: btn_employee
-            text: "Панель сотрудника"
-            font_size: "18sp"
-            size_hint_y: None
+            text: "3.   Панель сотрудника"
             height: 0 if self.disabled else dp(64)
             opacity: 0 if self.disabled else 1
             on_release: root.goto_employee_panel()
 
         Widget:
 
-        Label:
+        FinePrint:
+            text: "ⓘ  Состав разделов зависит от роли, подразделения и уровня доступа пользователя"
+            size_hint_y: None
+            height: dp(42)
+
+        FinePrint:
             text: root.status_text
+            color: 0.72, 0.08, 0.08, 1
             size_hint_y: None
-            height: dp(36)
+            height: dp(28)
 
-        BoxLayout:
-            size_hint_y: None
-            height: dp(40)
-            spacing: dp(10)
-
-            Button:
-                text: "Выйти"
-                on_release:
-                    app.current_user = None
-                    app.root.current = "login"
+        SecondaryButton:
+            text: "Выйти"
+            on_release:
+                app.current_user = None
+                app.root.current = "login"
 
 
 <FinanceAccountScreen>:
     BoxLayout:
         orientation: "vertical"
-        padding: dp(12)
-        spacing: dp(8)
+        padding: dp(16), dp(20)
+        spacing: dp(10)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
 
         BoxLayout:
             size_hint_y: None
-            height: dp(42)
+            height: dp(44)
             spacing: dp(8)
 
-            Button:
+            SecondaryButton:
                 text: "Назад"
                 size_hint_x: None
-                width: dp(96)
+                width: dp(92)
                 on_release: root.goto_home()
 
-            Button:
+            SecondaryButton:
                 text: "Обновить"
                 size_hint_x: None
-                width: dp(116)
+                width: dp(112)
                 on_release: root.refresh()
 
+        ScreenTitle:
+            text: "ЛИЧНЫЙ КАБИНЕТ"
+
+        ScreenSubtitle:
+            text: "Баланс, операции, перевод и вывод ST"
+
+        CardBox:
+            orientation: "vertical"
+            size_hint_y: None
+            height: dp(82)
+
             Label:
-                text: root.balance_text
+                text: "Текущий баланс"
+                color: 0.34, 0.34, 0.34, 1
+                font_size: "13sp"
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+                size_hint_y: None
+                height: dp(20)
+
+            Label:
+                text: root.balance_text.replace("Баланс: ", "")
+                color: 0.03, 0.03, 0.03, 1
                 bold: True
-                halign: "right"
+                font_size: "24sp"
+                halign: "left"
                 valign: "middle"
                 text_size: self.size
 
-        TextInput:
+        AppTextInput:
             id: search_input
             hint_text: "Поиск по операциям"
             multiline: False
-            size_hint_y: None
-            height: dp(42)
             on_text_validate: root.refresh()
 
-        BoxLayout:
+        CardBox:
+            orientation: "vertical"
             size_hint_y: None
-            height: dp(42)
-            spacing: dp(8)
+            height: dp(162)
+
+            SectionLabel:
+                text: "Перевод средств"
 
             Spinner:
                 id: finance_receiver
-                text: "получатель"
+                text: "Получатель"
                 values: ()
+                size_hint_y: None
+                height: dp(44)
+                background_normal: ""
+                background_color: 1, 1, 1, 1
+                color: 0.05, 0.05, 0.05, 1
                 on_text: root.on_receiver_selected(self.text)
 
-            TextInput:
-                id: transfer_amount
-                hint_text: "ST"
-                input_filter: "float"
-                multiline: False
-                size_hint_x: None
-                width: dp(82)
+            BoxLayout:
+                spacing: dp(8)
+                size_hint_y: None
+                height: dp(44)
 
-            Button:
-                text: "Перевести"
-                size_hint_x: None
-                width: dp(112)
-                on_release: root.send_transfer()
+                AppTextInput:
+                    id: transfer_amount
+                    hint_text: "Сумма ST"
+                    input_filter: "float"
+                    multiline: False
 
-        TextInput:
+                PrimaryButton:
+                    text: "Перевести"
+                    size_hint_x: None
+                    width: dp(120)
+                    on_release: root.send_transfer()
+
+        AppTextInput:
             id: transfer_comment
             hint_text: "Комментарий к переводу"
             multiline: False
+
+        CardBox:
+            orientation: "vertical"
             size_hint_y: None
-            height: dp(38)
+            height: dp(114)
 
-        BoxLayout:
-            size_hint_y: None
-            height: dp(42)
-            spacing: dp(8)
+            SectionLabel:
+                text: "Вывод средств"
 
-            TextInput:
-                id: withdraw_amount
-                hint_text: "Сумма вывода ST"
-                input_filter: "float"
-                multiline: False
+            BoxLayout:
+                spacing: dp(8)
+                size_hint_y: None
+                height: dp(44)
 
-            Button:
-                text: "Вывести"
-                size_hint_x: None
-                width: dp(112)
-                on_release: root.send_withdraw()
+                AppTextInput:
+                    id: withdraw_amount
+                    hint_text: "Сумма вывода ST"
+                    input_filter: "float"
+                    multiline: False
 
-        TextInput:
+                PrimaryButton:
+                    text: "Вывести"
+                    size_hint_x: None
+                    width: dp(112)
+                    on_release: root.send_withdraw()
+
+        AppTextInput:
             id: withdraw_comment
             hint_text: "Куда вывести / реквизиты / комментарий"
             multiline: False
-            size_hint_y: None
-            height: dp(38)
+
+        SectionLabel:
+            text: "История операций"
 
         ScrollView:
             do_scroll_x: True
             do_scroll_y: False
             size_hint_y: None
-            height: dp(46)
+            height: dp(42)
             bar_width: dp(6)
 
             BoxLayout:
                 id: finance_header
                 orientation: "horizontal"
                 size_hint_x: None
-                height: dp(46)
+                height: dp(42)
 
         RecycleView:
             id: finance_table
@@ -239,8 +477,91 @@
 
         Label:
             text: root.status_text
+            color: 0.28, 0.28, 0.28, 1
+            font_size: "12sp"
+            halign: "left"
+            valign: "middle"
+            text_size: self.size
             size_hint_y: None
-            height: dp(28)
+            height: dp(24)
+
+
+<VoentorgScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(24), dp(28)
+        spacing: dp(12)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        SecondaryButton:
+            text: "Назад"
+            size_hint_x: None
+            width: dp(92)
+            on_release: root.goto_home()
+
+        ScreenTitle:
+            text: "ВОЕНТОРГ"
+
+        ScreenSubtitle:
+            text: "Заказы, статусы и карточки шевронов"
+
+        BoxLayout:
+            id: voentorg_cards
+            orientation: "vertical"
+            spacing: dp(10)
+            size_hint_y: None
+            height: self.minimum_height
+
+        Widget:
+
+        FinePrint:
+            text: "Раздел подготовлен в едином стиле. API заказов подключается отдельным этапом."
+            size_hint_y: None
+            height: dp(42)
+
+
+<EmployeePanelScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(24), dp(28)
+        spacing: dp(12)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        SecondaryButton:
+            text: "Назад"
+            size_hint_x: None
+            width: dp(92)
+            on_release: root.goto_home()
+
+        ScreenTitle:
+            text: "ПАНЕЛЬ СОТРУДНИКА"
+
+        ScreenSubtitle:
+            text: "Рабочие роли и быстрый доступ"
+
+        BoxLayout:
+            id: employee_cards
+            orientation: "vertical"
+            spacing: dp(10)
+            size_hint_y: None
+            height: self.minimum_height
+
+        Widget:
+
+        FinePrint:
+            text: "Доступ к веткам зависит от должности, роли и уровня прав пользователя."
+            size_hint_y: None
+            height: dp(42)
 
 
 <TransferListScreen>:

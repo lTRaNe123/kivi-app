@@ -9,6 +9,7 @@ from kivy.clock import Clock
 Clock.max_iteration = 1000
 
 from kivy.lang import Builder
+from kivy.graphics import Color, Line, RoundedRectangle
 from kivy.metrics import dp
 from kivy.properties import (
     ObjectProperty,
@@ -43,13 +44,15 @@ def make_inventory_label(text: str) -> Label:
         size_hint_x=1,
         halign="left",
         valign="top",
+        color=(0.07, 0.07, 0.07, 1),
+        padding=(dp(12), dp(10)),
     )
 
     def _on_width(instance, value):
         instance.text_size = (value, None)
 
     def _on_texture_size(instance, size):
-        instance.height = size[1] + dp(6)
+        instance.height = size[1] + dp(20)
 
     lbl.bind(width=_on_width, texture_size=_on_texture_size)
     return lbl
@@ -61,8 +64,10 @@ def make_table_label(text: str, width: int) -> Label:
         size_hint=(None, None),
         width=dp(width),
         halign="left",
-        valign="top",
+        valign="middle",
         padding=(dp(8), dp(6)),
+        color=(0.07, 0.07, 0.07, 1),
+        font_size="13sp",
     )
     lbl.bind(
         width=lambda inst, value: setattr(inst, "text_size", (value - dp(16), None)),
@@ -102,6 +107,64 @@ class FinanceTableRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
         app = App.get_running_app()
         screen = app.root.get_screen("finance_account")
         screen.open_operation_detail(self.row_data)
+
+
+def fill_cards(container, items):
+    container.clear_widgets()
+    for idx, item in enumerate(items, start=1):
+        card = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(76),
+            padding=(dp(14), dp(10)),
+            spacing=dp(12),
+        )
+        card.canvas.before.clear()
+        with card.canvas.before:
+            Color(1, 1, 1, 1)
+            card._bg = RoundedRectangle(pos=card.pos, size=card.size, radius=[dp(8)])
+            Color(0.86, 0.86, 0.86, 1)
+            card._border = Line(
+                rounded_rectangle=(card.x, card.y, card.width, card.height, dp(8)),
+                width=1,
+            )
+
+        def _sync_canvas(instance, *_):
+            instance._bg.pos = instance.pos
+            instance._bg.size = instance.size
+            instance._border.rounded_rectangle = (
+                instance.x,
+                instance.y,
+                instance.width,
+                instance.height,
+                dp(8),
+            )
+
+        card.bind(pos=_sync_canvas, size=_sync_canvas)
+        card.add_widget(
+            Label(
+                text=str(idx),
+                size_hint_x=None,
+                width=dp(28),
+                bold=True,
+                color=(0.05, 0.05, 0.05, 1),
+                font_size="18sp",
+                halign="center",
+                valign="middle",
+                text_size=(dp(28), dp(56)),
+            )
+        )
+        title = Label(
+            text=item,
+            bold=True,
+            color=(0.05, 0.05, 0.05, 1),
+            font_size="16sp",
+            halign="left",
+            valign="middle",
+        )
+        title.bind(size=lambda inst, *_: setattr(inst, "text_size", inst.size))
+        card.add_widget(title)
+        container.add_widget(card)
 
 
 def build_inventory_from_docs(docs):
@@ -328,10 +391,10 @@ class UserHomeScreen(Screen):
         self.manager.current = "finance_account"
 
     def goto_voentorg(self):
-        self.status_text = "Военторг будет подключён следующим этапом"
+        self.manager.current = "voentorg"
 
     def goto_employee_panel(self):
-        self.status_text = "Панель сотрудника будет подключена после Военторга"
+        self.manager.current = "employee_panel"
 
 
 # ---------- ЭКРАН: ЛИЧНЫЙ КАБИНЕТ ----------
@@ -953,6 +1016,40 @@ class FormViewScreen(Screen):
         threading.Thread(target=worker, daemon=True).start()
 
 
+# ---------- БАЗОВЫЕ ЭКРАНЫ РАЗДЕЛОВ ----------
+
+
+class VoentorgScreen(Screen):
+    def on_pre_enter(self, *args):
+        fill_cards(
+            self.ids.voentorg_cards,
+            [
+                "Заказ шевронов",
+                "Список заказов",
+                "Статус заказа",
+                "Карточка заказа",
+            ],
+        )
+
+    def goto_home(self):
+        self.manager.current = "user_home"
+
+
+class EmployeePanelScreen(Screen):
+    def on_pre_enter(self, *args):
+        fill_cards(
+            self.ids.employee_cards,
+            [
+                "Вышивальщик",
+                "Вырезальщик / комплектовальщик",
+                "Доставщик",
+            ],
+        )
+
+    def goto_home(self):
+        self.manager.current = "user_home"
+
+
 # ---------- ROOT & APP ----------
 
 
@@ -972,6 +1069,8 @@ class SixnerInventoryApp(App):
         sm.add_widget(LoginScreen(name="login"))
         sm.add_widget(UserHomeScreen(name="user_home"))
         sm.add_widget(FinanceAccountScreen(name="finance_account"))
+        sm.add_widget(VoentorgScreen(name="voentorg"))
+        sm.add_widget(EmployeePanelScreen(name="employee_panel"))
         sm.add_widget(TransferListScreen(name="transfers"))
         sm.add_widget(TransferCreateScreen(name="transfer_create"))
         sm.add_widget(FormsMenuScreen(name="forms_menu"))
