@@ -102,6 +102,13 @@ CHEVRON_STATUS_COLORS = {
     "CANCELLED": [0.70, 0.20, 0.20, 1],
 }
 
+EMPLOYEE_STAGE_LABELS = {
+    "EMBROIDERY": "Вышивка",
+    "CUTTING_PACKING": "Вырезка / комплектация",
+    "DELIVERY": "Доставка",
+    "COMPLETED": "Завершён",
+}
+
 
 def chevron_status_label(status):
     return CHEVRON_STATUS_LABELS.get(status or "", status or "Неизвестно")
@@ -120,6 +127,10 @@ def chevron_price_text(payload):
     if payload.get("total_st") is not None:
         parts.append(f"{payload.get('total_st')} ST")
     return " / ".join(parts) if parts else "Стоимость не назначена"
+
+
+def employee_stage_label(stage):
+    return EMPLOYEE_STAGE_LABELS.get(stage or "", stage or "Неизвестно")
 
 
 class FinanceTableRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
@@ -2501,22 +2512,259 @@ class ChevronAdminPricingScreen(Screen):
         self.manager.current = "employee_panel"
 
 
+class EmployeeOrdersScreen(Screen):
+    role_code = StringProperty("")
+    role_title = StringProperty("Очередь")
+    status_text = StringProperty("")
+    query_text = StringProperty("")
+    loading = BooleanProperty(False)
+    page = NumericProperty(1)
+    has_more = BooleanProperty(False)
+
+    def open_role(self, role):
+        self.role_code = role.get("code") or ""
+        self.role_title = role.get("title") or "Очередь"
+        self.query_text = ""
+        self.page = 1
+        self.ids.employee_search.text = ""
+        self.ids.employee_orders_list.data = []
+        self.load_orders()
+
+    def load_orders(self):
+        if not self.role_code:
+            self.status_text = "Роль не выбрана"
+            return
+        self.loading = True
+        self.status_text = "Загружаем очередь..."
+        self.ids.employee_orders_list.data = []
+        query = (self.ids.employee_search.text or "").strip()
+        self.query_text = query
+
+        def worker():
+            try:
+                data = api_client.get_employee_orders(self.role_code, query=query, page=1, limit=20)
+            except Exception as exc:
+                msg = f"Ошибка очереди: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                orders = data.get("orders") or []
+                pagination = data.get("pagination") or {}
+                self.page = int(pagination.get("page") or 1)
+                self.has_more = bool(pagination.get("has_more"))
+                self.ids.employee_orders_list.data = [self._row_payload(order) for order in orders]
+                self.status_text = "" if orders else "Очередь пуста."
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def load_more(self):
+        if self.loading or not self.has_more:
+            return
+        next_page = int(self.page) + 1
+        query = (self.ids.employee_search.text or "").strip()
+        self.loading = True
+        self.status_text = "Загружаем ещё..."
+
+        def worker():
+            try:
+                data = api_client.get_employee_orders(self.role_code, query=query, page=next_page, limit=20)
+            except Exception as exc:
+                msg = f"Ошибка очереди: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                orders = data.get("orders") or []
+                pagination = data.get("pagination") or {}
+                self.page = int(pagination.get("page") or next_page)
+                self.has_more = bool(pagination.get("has_more"))
+                self.ids.employee_orders_list.data = list(self.ids.employee_orders_list.data) + [
+                    self._row_payload(order) for order in orders
+                ]
+                self.status_text = ""
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _row_payload(self, order):
+        created = (order.get("created_at") or "").split(" ")[0]
+        lines_count = int(order.get("lines_count") or 0)
+        total_quantity = int(order.get("total_quantity") or 0)
+        test = " · TEST" if order.get("is_test") else ""
+        return {
+            "order_id": int(order.get("id") or 0),
+            "order_number": order.get("order_number") or "",
+            "kit_title": order.get("kit_title") or "",
+            "meta": f"{created} · строк: {lines_count} · всего: {total_quantity}{test}",
+            "price_text": employee_stage_label(order.get("current_stage")),
+            "status_text": "TEST" if order.get("is_test") else chevron_status_label(order.get("status")),
+            "status_color": [0.45, 0.50, 0.30, 1] if order.get("is_test") else chevron_status_color(order.get("status")),
+        }
+
+    def open_order(self, order_id):
+        detail = self.manager.get_screen("employee_order_detail")
+        detail.open_order(order_id, self.role_code, self.role_title)
+        self.manager.current = "employee_order_detail"
+
+    def goto_employee(self):
+        self.manager.current = "employee_panel"
+
+
+class EmployeeOrderDetailScreen(Screen):
+    order_id = NumericProperty(0)
+    role_code = StringProperty("")
+    role_title = StringProperty("")
+    title_text = StringProperty("Заказ")
+    status_text = StringProperty("")
+    kit_text = StringProperty("")
+    config_text = StringProperty("")
+    lines_text = StringProperty("")
+    comment_text = StringProperty("Комментарий клиента: нет")
+    history_text = StringProperty("")
+    test_text = StringProperty("")
+    loading = BooleanProperty(False)
+    error_text = StringProperty("")
+
+    def open_order(self, order_id, role_code, role_title):
+        self.order_id = int(order_id or 0)
+        self.role_code = role_code or ""
+        self.role_title = role_title or ""
+        self.load_detail()
+
+    def load_detail(self):
+        if not self.order_id:
+            self.error_text = "Заказ не выбран"
+            return
+        self.loading = True
+        self.error_text = "Загружаем заказ..."
+
+        def worker():
+            try:
+                data = api_client.get_employee_order_detail(self.order_id, self.role_code)
+            except Exception as exc:
+                msg = f"Ошибка заказа: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.error_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                self._render(data)
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _render(self, data):
+        order = data.get("order") or {}
+        kit = data.get("kit") or {}
+        workflow = data.get("workflow") or {}
+        options = data.get("options") or []
+        lines = data.get("lines") or []
+        history = data.get("history") or []
+
+        self.title_text = order.get("order_number") or "Заказ"
+        self.status_text = f"Этап: {workflow.get('current_stage_title') or employee_stage_label(workflow.get('current_stage'))}"
+        self.kit_text = f"Комплект: {kit.get('title') or ''}\nСоздан: {order.get('created_at') or ''}"
+        self.config_text = "\n".join(
+            f"{option.get('group_title')}: {option.get('title')}" for option in options
+        ) or "Параметры не найдены"
+        self.lines_text = "\n".join(
+            f"{line.get('text_value')} × {line.get('quantity')}" for line in lines
+        ) or "Строки не найдены"
+        self.comment_text = "Комментарий клиента: " + (order.get("client_comment") or "нет")
+        self.history_text = "\n".join(
+            f"{item.get('created_at')} · {item.get('stage_title')} · {item.get('action')}"
+            for item in history
+        ) or "История пуста"
+        self.test_text = "Тестовый заказ" if order.get("is_test") else "Production"
+        self.error_text = ""
+
+    def goto_queue(self):
+        self.manager.current = "employee_orders"
+
+
 class EmployeePanelScreen(Screen):
+    status_text = StringProperty("")
+    loading = BooleanProperty(False)
+
     def on_pre_enter(self, *args):
-        app = App.get_running_app()
-        user = app.current_user or {}
-        is_admin = int(user.get("access") or 0) == 1
-        self.ids.btn_admin_pricing.disabled = not is_admin
-        self.ids.btn_admin_pricing.opacity = 1 if is_admin else 0
-        self.ids.btn_admin_pricing.height = dp(52) if is_admin else 0
-        fill_cards(
-            self.ids.employee_cards,
-            [
-                "Вышивальщик",
-                "Вырезальщик / комплектовальщик",
-                "Доставщик",
-            ],
-        )
+        self.load_profile()
+
+    def load_profile(self):
+        self.loading = True
+        self.status_text = "Загружаем роли..."
+        self.ids.employee_list.data = []
+
+        def worker():
+            try:
+                data = api_client.get_employee_profile()
+            except Exception as exc:
+                msg = f"Ошибка панели: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.loading = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.loading = False
+                sections = data.get("sections") or []
+                rows = [
+                    {
+                        "title": section.get("title") or "",
+                        "subtitle": employee_stage_label(section.get("stage")),
+                        "icon_text": str(index).zfill(2),
+                        "action": "employee_role",
+                        "payload": section,
+                    }
+                    for index, section in enumerate(sections, start=1)
+                ]
+                if data.get("admin_access"):
+                    rows.append({
+                        "title": "Настройка Военторга",
+                        "subtitle": "Цены, режим TEST / PRODUCTION",
+                        "icon_text": "A",
+                        "action": "admin_pricing",
+                        "payload": {},
+                    })
+                self.ids.employee_list.data = rows
+                self.status_text = "" if rows else "Нет доступных ролей сотрудника."
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def handle_nav_action(self, action, payload):
+        if action == "admin_pricing":
+            self.goto_admin_pricing()
+            return
+        if action == "employee_role":
+            screen = self.manager.get_screen("employee_orders")
+            screen.open_role(payload or {})
+            self.manager.current = "employee_orders"
 
     def goto_admin_pricing(self):
         self.manager.current = "chevron_admin_pricing"
@@ -2553,6 +2801,8 @@ class SixnerInventoryApp(App):
         sm.add_widget(ChevronNamesDraftScreen(name="chevron_names_draft"))
         sm.add_widget(ChevronQuoteConfirmScreen(name="chevron_quote_confirm"))
         sm.add_widget(ChevronAdminPricingScreen(name="chevron_admin_pricing"))
+        sm.add_widget(EmployeeOrdersScreen(name="employee_orders"))
+        sm.add_widget(EmployeeOrderDetailScreen(name="employee_order_detail"))
         sm.add_widget(EmployeePanelScreen(name="employee_panel"))
         sm.add_widget(TransferListScreen(name="transfers"))
         sm.add_widget(TransferCreateScreen(name="transfer_create"))

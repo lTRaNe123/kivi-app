@@ -43,6 +43,9 @@ class ApiClient:
       /api/chevron_order_detail.php
       /api/chevron_admin_pricing_get.php
       /api/chevron_admin_pricing_update.php
+      /api/employee_profile.php
+      /api/employee_orders.php
+      /api/employee_order_detail.php
     """
 
     def __init__(self, base_url: str):
@@ -559,6 +562,64 @@ class ApiClient:
         )
         if not isinstance(payload.get("pricing") or {}, dict):
             raise ApiError("API настроек цен не вернул pricing")
+        return payload
+
+    def get_employee_profile(self) -> Dict[str, Any]:
+        """
+        GET /api/employee_profile.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json("GET", "employee_profile.php")
+        if not isinstance(payload.get("employee") or {}, dict):
+            raise ApiError("API сотрудника не вернул employee")
+        if not isinstance(payload.get("sections") or [], list):
+            raise ApiError("API сотрудника не вернул sections")
+        return payload
+
+    def get_employee_orders(
+        self,
+        role: str,
+        query: str = "",
+        stage: str = "",
+        page: int = 1,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        """
+        GET /api/employee_orders.php
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        params = {
+            "role": role,
+            "page": page,
+            "limit": limit,
+        }
+        if query:
+            params["q"] = query
+        if stage:
+            params["stage"] = stage
+        payload = self._request_json("GET", "employee_orders.php", params=params)
+        if not isinstance(payload.get("orders") or [], list):
+            raise ApiError("API очереди не вернул orders")
+        return payload
+
+    def get_employee_order_detail(self, order_id: int, role: str) -> Dict[str, Any]:
+        """
+        GET /api/employee_order_detail.php?id=...&role=...
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json(
+            "GET",
+            "employee_order_detail.php",
+            params={"id": order_id, "role": role},
+        )
+        if not isinstance(payload.get("order") or {}, dict):
+            raise ApiError("API рабочего заказа не вернул order")
         return payload
 
 
