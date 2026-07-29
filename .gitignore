@@ -7,4 +7,7 @@ __pycache__/
 .buildozer/
 bin/
 releases/*.apk
+releases/*.zip
 *.apk
+
+data/users.json

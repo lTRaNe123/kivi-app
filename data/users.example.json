@@ -1,0 +1,13 @@
+{
+  "persons": [
+    {
+      "id": 1,
+      "full_name": "Demo User",
+      "category": "demo",
+      "role": "user",
+      "unit": "Demo Unit",
+      "special_tag": null,
+      "login": "demo-user"
+    }
+  ]
+}
