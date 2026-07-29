@@ -2,10 +2,56 @@
 #:import dp kivy.metrics.dp
 
 
+<Screen>:
+    canvas.before:
+        Color:
+            rgba: 0.965, 0.965, 0.95, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+
+<PageLayout@BoxLayout>:
+    orientation: "vertical"
+    padding: dp(20), dp(24)
+    spacing: dp(10)
+    size_hint_x: None
+    width: max(dp(280), min(self.parent.width - dp(32), dp(1180))) if self.parent else dp(360)
+    pos_hint: {"center_x": 0.5}
+
+
+<OButton@Button>:
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    color: 1, 1, 1, 1
+    bold: True
+    font_size: "14sp"
+    size_hint_y: None
+    height: dp(44)
+    canvas.before:
+        Color:
+            rgba: (0.45, 0.50, 0.30, 1) if self.state == "normal" else (0.36, 0.40, 0.24, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+
+
+<SegmentButton@Button>:
+    background_normal: ""
+    background_down: ""
+    background_color: 0, 0, 0, 0
+    bold: True
+    font_size: "13sp"
+    size_hint_y: None
+    height: dp(42)
+
+
 <ScreenTitle@Label>:
     color: 0.04, 0.04, 0.04, 1
     bold: True
-    font_size: "30sp"
+    font_size: "26sp"
     halign: "left"
     valign: "middle"
     text_size: self.size
@@ -25,7 +71,7 @@
 
 <FinePrint@Label>:
     color: 0.25, 0.25, 0.25, 1
-    font_size: "12sp"
+    font_size: "13sp"
     halign: "left"
     valign: "middle"
     text_size: self.size
@@ -55,6 +101,7 @@
     foreground_color: 0.05, 0.05, 0.05, 1
     hint_text_color: 0.48, 0.48, 0.48, 1
     cursor_color: 0.05, 0.05, 0.05, 1
+    cursor_width: dp(2)
     font_size: "16sp"
     padding: dp(14), dp(13)
     size_hint_y: None
@@ -67,10 +114,10 @@
             size: self.size
             radius: [dp(8)]
         Color:
-            rgba: 0.82, 0.82, 0.82, 1
+            rgba: (0.45, 0.50, 0.30, 1) if self.focus else (0.82, 0.82, 0.82, 1)
         Line:
             rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
-            width: 1
+            width: 1.25 if self.focus else 1
 
 
 <PrimaryButton@Button>:
@@ -84,7 +131,7 @@
     height: dp(52)
     canvas.before:
         Color:
-            rgba: (0.02, 0.02, 0.02, 1) if self.state == "normal" else (0.16, 0.16, 0.16, 1)
+            rgba: (0.45, 0.50, 0.30, 1) if self.state == "normal" else (0.36, 0.40, 0.24, 1)
         RoundedRectangle:
             pos: self.pos
             size: self.size
@@ -222,7 +269,7 @@
         Label:
             text: root.subtitle
             color: 0.36, 0.36, 0.36, 1
-            font_size: "12sp"
+            font_size: "13sp"
             halign: "left"
             valign: "top"
             text_size: self.size
@@ -247,13 +294,13 @@
     height: dp(106)
     canvas.before:
         Color:
-            rgba: 0.08, 0.15, 0.27, 1
+            rgba: 1, 1, 1, 1
         RoundedRectangle:
             pos: self.pos
             size: self.size
             radius: [dp(8)]
         Color:
-            rgba: 0.42, 0.55, 0.72, 0.45
+            rgba: 0.82, 0.82, 0.80, 1
         Line:
             rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
             width: 1
@@ -264,9 +311,9 @@
 
         Label:
             text: root.placeholder
-            color: 0.72, 0.80, 0.90, 1
+            color: 0.45, 0.50, 0.30, 1
             bold: True
-            font_size: "10sp"
+            font_size: "13sp"
             halign: "center"
             valign: "middle"
             text_size: self.size
@@ -275,13 +322,13 @@
             size: dp(72), dp(72)
             canvas.before:
                 Color:
-                    rgba: 0.10, 0.20, 0.34, 1
+                    rgba: 0.94, 0.95, 0.91, 1
                 RoundedRectangle:
                     pos: self.pos
                     size: self.size
                     radius: [dp(8)]
                 Color:
-                    rgba: 0.50, 0.62, 0.78, 0.45
+                    rgba: 0.76, 0.79, 0.64, 1
                 Line:
                     rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
                     width: 1
@@ -301,17 +348,17 @@
 
         Label:
             text: root.title
-            color: 1, 1, 1, 1
+            color: 0.04, 0.04, 0.04, 1
             bold: True
-            font_size: "13sp"
+            font_size: "16sp"
             halign: "left"
             valign: "bottom"
             text_size: self.size
 
         Label:
             text: root.meta
-            color: 0.70, 0.78, 0.88, 1
-            font_size: "12sp"
+            color: 0.34, 0.34, 0.34, 1
+            font_size: "13sp"
             halign: "left"
             valign: "top"
             text_size: self.size
@@ -320,30 +367,31 @@
 <ChevronOptionRow>:
     orientation: "horizontal"
     spacing: dp(10)
-    padding: dp(10), dp(7)
+    padding: dp(12), dp(8)
     size_hint_y: None
-    height: dp(58)
+    height: dp(54) if root.selection_type == "header" else dp(66)
     opacity: 0.48 if root.option_disabled and root.selection_type != "header" else 1
     canvas.before:
         Color:
-            rgba: (0.18, 0.37, 0.68, 1) if root.selected else ((0.04, 0.10, 0.20, 1) if root.selection_type == "header" else (0.07, 0.14, 0.25, 1))
+            rgba: (0.92, 0.94, 0.86, 1) if root.selected else ((1, 1, 1, 1) if root.selection_type != "header" else (0.94, 0.95, 0.91, 1))
         RoundedRectangle:
             pos: self.pos
             size: self.size
             radius: [dp(8)]
         Color:
-            rgba: (0.50, 0.58, 0.32, 1) if root.selected else (0.42, 0.55, 0.72, 0.35)
+            rgba: (0.45, 0.50, 0.30, 1) if root.selected else (0.82, 0.82, 0.80, 1)
         Line:
             rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
             width: 1
 
     Label:
         text: root.mark
-        color: 1, 1, 1, 1
+        color: 0.45, 0.50, 0.30, 1
         bold: True
-        font_size: "17sp"
+        font_size: "18sp"
         size_hint_x: None
-        width: dp(26)
+        width: 0 if root.selection_type == "header" else dp(30)
+        opacity: 0 if root.selection_type == "header" else 1
         halign: "center"
         valign: "middle"
         text_size: self.size
@@ -354,27 +402,27 @@
 
         Label:
             text: root.title
-            color: 1, 1, 1, 1
+            color: 0.05, 0.05, 0.05, 1
             bold: True
-            font_size: "14sp" if root.selection_type != "header" else "15sp"
+            font_size: "15sp" if root.selection_type != "header" else "17sp"
             halign: "left"
             valign: "middle"
-            text_size: self.size
+            text_size: self.width, None
 
         Label:
             text: root.price_text
-            color: 0.68, 0.78, 0.90, 1
-            font_size: "11sp"
+            color: 0.36, 0.36, 0.36, 1
+            font_size: "13sp"
             halign: "left"
             valign: "middle"
             text_size: self.size
 
     Label:
-        text: "выбрано" if root.selected else ""
-        color: 0.85, 0.89, 0.70, 1
-        font_size: "11sp"
+        text: "Выбрано" if root.selected else ""
+        color: 0.45, 0.50, 0.30, 1
+        font_size: "13sp"
         size_hint_x: None
-        width: dp(64)
+        width: 0 if root.selection_type == "header" else dp(78)
         halign: "right"
         valign: "middle"
         text_size: self.size
@@ -388,13 +436,13 @@
     height: dp(62)
     canvas.before:
         Color:
-            rgba: 0.07, 0.14, 0.25, 1
+            rgba: 1, 1, 1, 1
         RoundedRectangle:
             pos: self.pos
             size: self.size
             radius: [dp(8)]
         Color:
-            rgba: 0.42, 0.55, 0.72, 0.35
+            rgba: 0.82, 0.82, 0.80, 1
         Line:
             rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
             width: 1
@@ -405,7 +453,7 @@
 
         Label:
             text: root.text_value
-            color: 1, 1, 1, 1
+            color: 0.04, 0.04, 0.04, 1
             bold: True
             font_size: "15sp"
             halign: "left"
@@ -414,8 +462,8 @@
 
         Label:
             text: "Количество: " + str(root.quantity)
-            color: 0.70, 0.78, 0.88, 1
-            font_size: "12sp"
+            color: 0.34, 0.34, 0.34, 1
+            font_size: "13sp"
             halign: "left"
             valign: "middle"
             text_size: self.size
@@ -424,8 +472,8 @@
         text: "-"
         background_normal: ""
         background_down: ""
-        background_color: 0.08, 0.15, 0.27, 1
-        color: 1, 1, 1, 1
+        background_color: 0.88, 0.88, 0.84, 1
+        color: 0.05, 0.05, 0.05, 1
         bold: True
         size_hint_x: None
         width: dp(34)
@@ -435,7 +483,7 @@
         text: "+"
         background_normal: ""
         background_down: ""
-        background_color: 0.18, 0.37, 0.68, 1
+        background_color: 0.45, 0.50, 0.30, 1
         color: 1, 1, 1, 1
         bold: True
         size_hint_x: None
@@ -446,10 +494,10 @@
         text: "Изм."
         background_normal: ""
         background_down: ""
-        background_color: 0.08, 0.15, 0.27, 1
-        color: 1, 1, 1, 1
+        background_color: 0.88, 0.88, 0.84, 1
+        color: 0.05, 0.05, 0.05, 1
         bold: True
-        font_size: "11sp"
+        font_size: "13sp"
         size_hint_x: None
         width: dp(48)
         on_release: root.edit_line()
@@ -458,10 +506,10 @@
         text: "Удал."
         background_normal: ""
         background_down: ""
-        background_color: 0.23, 0.10, 0.12, 1
-        color: 1, 1, 1, 1
+        background_color: 0.70, 0.20, 0.20, 1
+        color: 0.05, 0.05, 0.05, 1
         bold: True
-        font_size: "11sp"
+        font_size: "13sp"
         size_hint_x: None
         width: dp(52)
         on_release: root.remove_line()
@@ -507,7 +555,7 @@
                 text: root.status_text
                 color: 1, 1, 1, 1
                 bold: True
-                font_size: "10sp"
+                font_size: "13sp"
                 halign: "center"
                 valign: "middle"
                 text_size: self.size
@@ -537,7 +585,7 @@
             Label:
                 text: root.meta
                 color: 0.38, 0.38, 0.38, 1
-                font_size: "12sp"
+                font_size: "13sp"
                 halign: "left"
                 valign: "middle"
                 text_size: self.size
@@ -546,7 +594,7 @@
                 text: root.progress_text
                 color: 0.45, 0.50, 0.30, 1
                 bold: True
-                font_size: "12sp"
+                font_size: "13sp"
                 halign: "right"
                 valign: "middle"
                 text_size: self.size
@@ -554,7 +602,7 @@
         Label:
             text: root.price_text + ((" · " + root.test_text) if root.test_text else "")
             color: 0.20, 0.20, 0.20, 1
-            font_size: "12sp"
+            font_size: "13sp"
             halign: "left"
             valign: "middle"
             text_size: self.size
@@ -611,7 +659,7 @@
                 text: root.status_text
                 color: 1, 1, 1, 1
                 bold: True
-                font_size: "10sp"
+                font_size: "13sp"
                 halign: "center"
                 valign: "middle"
                 text_size: self.size
@@ -684,21 +732,26 @@
                 id: login_input
                 hint_text: "Логин"
                 multiline: False
+                write_tab: False
+                on_text_validate: root.submit_login_field()
 
             AppTextInput:
                 id: password_input
                 hint_text: "Пароль"
                 password: True
                 multiline: False
+                write_tab: False
+                on_text_validate: root.submit_password_field()
 
             PrimaryButton:
-                text: "Войти"
+                text: "Входим..." if root.login_loading else "Войти"
+                disabled: root.login_loading
                 on_release: root.do_login()
 
             Label:
                 text: root.message
-                color: 0.72, 0.08, 0.08, 1
-                font_size: "13sp"
+                color: (0.70, 0.18, 0.16, 1) if root.message_kind == "error" else (0.45, 0.50, 0.30, 1)
+                font_size: "14sp"
                 halign: "center"
                 valign: "top"
                 text_size: self.size
@@ -707,7 +760,7 @@
 
 
 <UserHomeScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(24), dp(28)
         spacing: dp(10)
@@ -740,7 +793,7 @@
             id: lbl_user_info
             text: "Звание / должность / подразделение"
             color: 0.35, 0.35, 0.35, 1
-            font_size: "12sp"
+            font_size: "13sp"
             halign: "left"
             valign: "top"
             text_size: self.size
@@ -781,12 +834,11 @@
         SecondaryButton:
             text: "Выйти"
             on_release:
-                app.current_user = None
-                app.root.current = "login"
+                app.logout()
 
 
 <FinanceAccountScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(16), dp(20)
         spacing: dp(10)
@@ -956,7 +1008,7 @@
         Label:
             text: root.status_text
             color: 0.28, 0.28, 0.28, 1
-            font_size: "12sp"
+            font_size: "13sp"
             halign: "left"
             valign: "middle"
             text_size: self.size
@@ -965,7 +1017,7 @@
 
 
 <VoentorgScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(24), dp(28)
         spacing: dp(12)
@@ -1028,7 +1080,7 @@
 
 
 <ChevronOrdersScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(18), dp(22)
         spacing: dp(10)
@@ -1074,8 +1126,8 @@
                 background_normal: ""
                 background_down: ""
                 bold: True
-                font_size: "12sp"
-                background_color: (0.04, 0.04, 0.04, 1) if root.active_filter == "" else (0.86, 0.86, 0.84, 1)
+                font_size: "13sp"
+                background_color: (0.45, 0.50, 0.30, 1) if root.active_filter == "" else (0.86, 0.86, 0.84, 1)
                 color: (1, 1, 1, 1) if root.active_filter == "" else (0.08, 0.08, 0.08, 1)
                 on_release: root.select_filter("")
 
@@ -1084,8 +1136,8 @@
                 background_normal: ""
                 background_down: ""
                 bold: True
-                font_size: "12sp"
-                background_color: (0.04, 0.04, 0.04, 1) if root.active_filter == "active" else (0.86, 0.86, 0.84, 1)
+                font_size: "13sp"
+                background_color: (0.45, 0.50, 0.30, 1) if root.active_filter == "active" else (0.86, 0.86, 0.84, 1)
                 color: (1, 1, 1, 1) if root.active_filter == "active" else (0.08, 0.08, 0.08, 1)
                 on_release: root.select_filter("active")
 
@@ -1094,8 +1146,8 @@
                 background_normal: ""
                 background_down: ""
                 bold: True
-                font_size: "12sp"
-                background_color: (0.04, 0.04, 0.04, 1) if root.active_filter == "drafts" else (0.86, 0.86, 0.84, 1)
+                font_size: "13sp"
+                background_color: (0.45, 0.50, 0.30, 1) if root.active_filter == "drafts" else (0.86, 0.86, 0.84, 1)
                 color: (1, 1, 1, 1) if root.active_filter == "drafts" else (0.08, 0.08, 0.08, 1)
                 on_release: root.select_filter("drafts")
 
@@ -1109,8 +1161,8 @@
                 background_normal: ""
                 background_down: ""
                 bold: True
-                font_size: "12sp"
-                background_color: (0.04, 0.04, 0.04, 1) if root.active_filter == "completed" else (0.86, 0.86, 0.84, 1)
+                font_size: "13sp"
+                background_color: (0.45, 0.50, 0.30, 1) if root.active_filter == "completed" else (0.86, 0.86, 0.84, 1)
                 color: (1, 1, 1, 1) if root.active_filter == "completed" else (0.08, 0.08, 0.08, 1)
                 on_release: root.select_filter("completed")
 
@@ -1146,7 +1198,7 @@
 
 
 <ChevronOrderDetailScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(18), dp(22)
         spacing: dp(10)
@@ -1194,7 +1246,7 @@
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(184)
+                    height: dp(186) + stage_steps_box.height
 
                     SectionLabel:
                         text: root.status_text
@@ -1203,9 +1255,12 @@
                         text: root.progress_text
                         color: 0.45, 0.50, 0.30, 1
 
-                    FinePrint:
-                        text: root.stage_text
-                        color: 0.28, 0.28, 0.28, 1
+                    BoxLayout:
+                        id: stage_steps_box
+                        orientation: "horizontal"
+                        spacing: dp(6)
+                        size_hint_y: None
+                        height: dp(42)
 
                     FinePrint:
                         text: root.test_text
@@ -1285,7 +1340,7 @@
             text: "Продолжить оформление"
             background_normal: ""
             background_down: ""
-            background_color: 0.20, 0.42, 0.78, 1
+            background_color: 0.45, 0.50, 0.30, 1
             color: 1, 1, 1, 1
             bold: True
             font_size: "15sp"
@@ -1297,7 +1352,7 @@
 
 
 <ChevronOrderScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(18), dp(22)
         spacing: dp(12)
@@ -1343,7 +1398,7 @@
                 background_color: (0.45, 0.50, 0.30, 1) if root.active_tab == "kits" else (1, 1, 1, 1)
                 color: (1, 1, 1, 1) if root.active_tab == "kits" else (0.05, 0.05, 0.05, 1)
                 bold: True
-                font_size: "12sp"
+                font_size: "13sp"
                 on_release: root.select_tab("kits")
 
             Button:
@@ -1353,7 +1408,7 @@
                 background_color: (0.45, 0.50, 0.30, 1) if root.active_tab == "single" else (1, 1, 1, 1)
                 color: (1, 1, 1, 1) if root.active_tab == "single" else (0.05, 0.05, 0.05, 1)
                 bold: True
-                font_size: "12sp"
+                font_size: "13sp"
                 on_release: root.select_tab("single")
 
             Button:
@@ -1363,7 +1418,7 @@
                 background_color: (0.45, 0.50, 0.30, 1) if root.active_tab == "photo" else (1, 1, 1, 1)
                 color: (1, 1, 1, 1) if root.active_tab == "photo" else (0.05, 0.05, 0.05, 1)
                 bold: True
-                font_size: "12sp"
+                font_size: "13sp"
                 on_release: root.select_tab("photo")
 
         RecycleView:
@@ -1388,7 +1443,7 @@
 
 
 <ChevronKitDetailScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(18), dp(22)
         spacing: dp(12)
@@ -1460,13 +1515,13 @@
 
 
 <ChevronConfiguratorScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(14), dp(18)
         spacing: dp(10)
         canvas.before:
             Color:
-                rgba: 0.015, 0.045, 0.105, 1
+                rgba: 0.965, 0.965, 0.95, 1
             Rectangle:
                 pos: self.pos
                 size: self.size
@@ -1480,8 +1535,8 @@
                 text: "Назад"
                 background_normal: ""
                 background_down: ""
-                background_color: 0.08, 0.15, 0.27, 1
-                color: 1, 1, 1, 1
+                background_color: 0.88, 0.88, 0.84, 1
+                color: 0.05, 0.05, 0.05, 1
                 bold: True
                 font_size: "13sp"
                 size_hint_x: None
@@ -1490,7 +1545,7 @@
 
             Label:
                 text: root.kit_title
-                color: 1, 1, 1, 1
+                color: 0.05, 0.05, 0.05, 1
                 bold: True
                 font_size: "20sp"
                 halign: "center"
@@ -1501,17 +1556,17 @@
                 text: "Повторить"
                 background_normal: ""
                 background_down: ""
-                background_color: 0.08, 0.15, 0.27, 1
-                color: 1, 1, 1, 1
+                background_color: 0.88, 0.88, 0.84, 1
+                color: 0.05, 0.05, 0.05, 1
                 bold: True
-                font_size: "12sp"
+                font_size: "13sp"
                 size_hint_x: None
                 width: dp(90)
                 on_release: root.load_detail()
 
         Label:
             text: "Загрузка..." if root.loading else root.price_text
-            color: 0.86, 0.91, 0.98, 1
+            color: 0.28, 0.28, 0.28, 1
             bold: True
             font_size: "14sp"
             halign: "center"
@@ -1522,7 +1577,7 @@
 
         Label:
             text: "Состав комплекта"
-            color: 1, 1, 1, 1
+            color: 0.05, 0.05, 0.05, 1
             bold: True
             font_size: "16sp"
             halign: "left"
@@ -1548,7 +1603,7 @@
 
         Label:
             text: "Настройки"
-            color: 1, 1, 1, 1
+            color: 0.05, 0.05, 0.05, 1
             bold: True
             font_size: "16sp"
             halign: "left"
@@ -1565,7 +1620,7 @@
             bar_width: dp(4)
 
             RecycleBoxLayout:
-                default_size: None, dp(58)
+                default_size: None, dp(66)
                 default_size_hint: 1, None
                 size_hint_y: None
                 height: self.minimum_height
@@ -1574,8 +1629,8 @@
 
         Label:
             text: root.status_text
-            color: 0.96, 0.72, 0.72, 1
-            font_size: "12sp"
+            color: 0.70, 0.18, 0.16, 1
+            font_size: "13sp"
             halign: "center"
             valign: "middle"
             text_size: self.size
@@ -1591,17 +1646,17 @@
                 text: "Выбрать другой дизайн"
                 background_normal: ""
                 background_down: ""
-                background_color: 0.08, 0.15, 0.27, 1
-                color: 1, 1, 1, 1
+                background_color: 0.88, 0.88, 0.84, 1
+                color: 0.05, 0.05, 0.05, 1
                 bold: True
-                font_size: "12sp"
+                font_size: "13sp"
                 on_release: root.confirm_choose_other()
 
             Button:
                 text: root.next_button_text
                 background_normal: ""
                 background_down: ""
-                background_color: 0.20, 0.42, 0.78, 1
+                background_color: 0.45, 0.50, 0.30, 1
                 color: 1, 1, 1, 1
                 bold: True
                 font_size: "15sp"
@@ -1609,13 +1664,13 @@
 
 
 <ChevronNamesDraftScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(14), dp(18)
         spacing: dp(10)
         canvas.before:
             Color:
-                rgba: 0.015, 0.045, 0.105, 1
+                rgba: 0.965, 0.965, 0.95, 1
             Rectangle:
                 pos: self.pos
                 size: self.size
@@ -1629,8 +1684,8 @@
                 text: "Назад"
                 background_normal: ""
                 background_down: ""
-                background_color: 0.08, 0.15, 0.27, 1
-                color: 1, 1, 1, 1
+                background_color: 0.88, 0.88, 0.84, 1
+                color: 0.05, 0.05, 0.05, 1
                 bold: True
                 font_size: "13sp"
                 size_hint_x: None
@@ -1639,7 +1694,7 @@
 
             Label:
                 text: root.kit_title
-                color: 1, 1, 1, 1
+                color: 0.05, 0.05, 0.05, 1
                 bold: True
                 font_size: "20sp"
                 halign: "center"
@@ -1648,7 +1703,7 @@
 
         Label:
             text: "Фамилии / Позывные"
-            color: 1, 1, 1, 1
+            color: 0.05, 0.05, 0.05, 1
             bold: True
             font_size: "22sp"
             halign: "left"
@@ -1659,8 +1714,8 @@
 
         Label:
             text: root.summary_text
-            color: 0.86, 0.91, 0.98, 1
-            font_size: "12sp"
+            color: 0.28, 0.28, 0.28, 1
+            font_size: "13sp"
             halign: "left"
             valign: "top"
             text_size: self.size
@@ -1672,22 +1727,17 @@
             height: dp(48)
             spacing: dp(8)
 
-            TextInput:
+            AppTextInput:
                 id: name_input
                 hint_text: "Фамилия или позывной"
                 multiline: False
-                background_color: 0.07, 0.14, 0.25, 1
-                foreground_color: 1, 1, 1, 1
-                hint_text_color: 0.58, 0.67, 0.78, 1
-                cursor_color: 1, 1, 1, 1
-                padding: dp(10), dp(12)
                 font_size: "15sp"
 
             Button:
                 text: "Добавить"
                 background_normal: ""
                 background_down: ""
-                background_color: 0.18, 0.37, 0.68, 1
+                background_color: 0.45, 0.50, 0.30, 1
                 color: 1, 1, 1, 1
                 bold: True
                 font_size: "13sp"
@@ -1712,8 +1762,8 @@
 
         Label:
             text: "Проверяем..." if root.loading else root.status_text
-            color: 0.96, 0.72, 0.72, 1
-            font_size: "12sp"
+            color: 0.70, 0.18, 0.16, 1
+            font_size: "13sp"
             halign: "center"
             valign: "middle"
             text_size: self.size
@@ -1724,7 +1774,7 @@
             text: "Продолжить"
             background_normal: ""
             background_down: ""
-            background_color: 0.20, 0.42, 0.78, 1
+            background_color: 0.45, 0.50, 0.30, 1
             color: 1, 1, 1, 1
             bold: True
             font_size: "15sp"
@@ -1735,13 +1785,13 @@
 
 
 <ChevronQuoteConfirmScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(14), dp(18)
         spacing: dp(10)
         canvas.before:
             Color:
-                rgba: 0.015, 0.045, 0.105, 1
+                rgba: 0.965, 0.965, 0.95, 1
             Rectangle:
                 pos: self.pos
                 size: self.size
@@ -1750,8 +1800,8 @@
             text: "Назад"
             background_normal: ""
             background_down: ""
-            background_color: 0.08, 0.15, 0.27, 1
-            color: 1, 1, 1, 1
+            background_color: 0.88, 0.88, 0.84, 1
+            color: 0.05, 0.05, 0.05, 1
             bold: True
             size_hint: None, None
             width: dp(82)
@@ -1760,7 +1810,7 @@
 
         Label:
             text: root.title_text
-            color: 1, 1, 1, 1
+            color: 0.05, 0.05, 0.05, 1
             bold: True
             font_size: "21sp"
             halign: "left"
@@ -1771,8 +1821,8 @@
 
         Label:
             text: root.summary_text
-            color: 0.86, 0.91, 0.98, 1
-            font_size: "12sp"
+            color: 0.28, 0.28, 0.28, 1
+            font_size: "13sp"
             halign: "left"
             valign: "top"
             text_size: self.size
@@ -1781,7 +1831,7 @@
 
         Label:
             text: "Фамилии / позывные"
-            color: 1, 1, 1, 1
+            color: 0.05, 0.05, 0.05, 1
             bold: True
             font_size: "16sp"
             halign: "left"
@@ -1792,7 +1842,7 @@
 
         Label:
             text: root.lines_text
-            color: 0.86, 0.91, 0.98, 1
+            color: 0.28, 0.28, 0.28, 1
             font_size: "14sp"
             halign: "left"
             valign: "top"
@@ -1800,7 +1850,7 @@
 
         Label:
             text: root.price_text
-            color: 0.96, 0.86, 0.62, 1
+            color: 0.45, 0.50, 0.30, 1
             bold: True
             font_size: "15sp"
             halign: "center"
@@ -1811,7 +1861,7 @@
 
         Label:
             text: root.pricing_label
-            color: 0.78, 0.90, 0.82, 1
+            color: 0.45, 0.50, 0.30, 1
             bold: True
             font_size: "13sp"
             halign: "center"
@@ -1829,8 +1879,8 @@
                 text: "Рубли"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.20, 0.42, 0.78, 1) if root.payment_method == "RUB" else (0.08, 0.15, 0.27, 1)
-                color: 1, 1, 1, 1
+                background_color: (0.45, 0.50, 0.30, 1) if root.payment_method == "RUB" else (0.88, 0.88, 0.84, 1)
+                color: (1, 1, 1, 1) if root.payment_method == "RUB" else (0.05, 0.05, 0.05, 1)
                 bold: True
                 font_size: "13sp"
                 on_release: root.set_payment_method("RUB")
@@ -1839,30 +1889,23 @@
                 text: "СТ"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.20, 0.42, 0.78, 1) if root.payment_method == "ST" else (0.08, 0.15, 0.27, 1)
-                color: 1, 1, 1, 1
+                background_color: (0.45, 0.50, 0.30, 1) if root.payment_method == "ST" else (0.88, 0.88, 0.84, 1)
+                color: (1, 1, 1, 1) if root.payment_method == "ST" else (0.05, 0.05, 0.05, 1)
                 bold: True
                 font_size: "13sp"
                 on_release: root.set_payment_method("ST")
 
-        TextInput:
+        AppTextInput:
             text: root.comment_text
             hint_text: "Комментарий к заказу"
             multiline: False
-            background_color: 0.07, 0.14, 0.25, 1
-            foreground_color: 1, 1, 1, 1
-            hint_text_color: 0.58, 0.67, 0.78, 1
-            cursor_color: 1, 1, 1, 1
-            padding: dp(10), dp(12)
             font_size: "14sp"
-            size_hint_y: None
-            height: dp(46)
             on_text: root.comment_text = self.text
 
         Label:
             text: root.draft_status_text
-            color: 0.78, 0.90, 0.82, 1
-            font_size: "12sp"
+            color: 0.45, 0.50, 0.30, 1
+            font_size: "13sp"
             halign: "center"
             valign: "middle"
             text_size: self.size
@@ -1878,8 +1921,8 @@
                 text: root.save_button_text
                 background_normal: ""
                 background_down: ""
-                background_color: (0.11, 0.30, 0.20, 1) if root.saved else (0.08, 0.15, 0.27, 1)
-                color: 1, 1, 1, 1
+                background_color: (0.45, 0.50, 0.30, 1) if root.saved else (0.88, 0.88, 0.84, 1)
+                color: (1, 1, 1, 1) if root.saved else (0.05, 0.05, 0.05, 1)
                 bold: True
                 font_size: "13sp"
                 disabled: root.saving or root.saved or root.checking_out
@@ -1889,7 +1932,7 @@
                 text: root.checkout_button_text
                 background_normal: ""
                 background_down: ""
-                background_color: 0.20, 0.42, 0.78, 1
+                background_color: 0.45, 0.50, 0.30, 1
                 color: 1, 1, 1, 1
                 bold: True
                 font_size: "13sp"
@@ -1898,7 +1941,7 @@
 
 
 <ChevronAdminPricingScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(18), dp(22)
         spacing: dp(10)
@@ -1957,7 +2000,7 @@
 
 
 <EmployeeOrdersScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(18), dp(22)
         spacing: dp(10)
@@ -2076,7 +2119,7 @@
 
 
 <EmployeeOrderDetailScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(18), dp(22)
         spacing: dp(10)
@@ -2205,7 +2248,7 @@
 
 
 <EmployeeAdminUsersScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(18), dp(22)
         spacing: dp(10)
@@ -2297,7 +2340,7 @@
 
 
 <EmployeeAdminUserDetailScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(18), dp(22)
         spacing: dp(10)
@@ -2429,7 +2472,7 @@
 
 
 <EmployeePanelScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(24), dp(28)
         spacing: dp(12)
@@ -2478,7 +2521,7 @@
     incoming_box: box_incoming
     outgoing_box: box_outgoing
 
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(16)
         spacing: dp(8)
@@ -2539,7 +2582,7 @@
     item_qty_input: inp_qty
     item_unit_input: inp_unit
 
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(16)
         spacing: dp(8)
@@ -2619,7 +2662,7 @@
 
 
 <FormsMenuScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(16)
         spacing: dp(8)
@@ -2631,7 +2674,7 @@
 
             Button:
                 text: "Назад"
-                on_release: app.root.current = "user_home"
+                on_release: app.back()
 
             Label:
                 text: "Книги / формы"
@@ -2677,7 +2720,7 @@
 
 
 <FormViewScreen>:
-    BoxLayout:
+    PageLayout:
         orientation: "vertical"
         padding: dp(10)
         spacing: dp(8)
@@ -2689,7 +2732,7 @@
 
             Button:
                 text: "Назад"
-                on_release: app.root.current = "forms_menu"
+                on_release: app.back()
 
             Button:
                 text: "Обновить"

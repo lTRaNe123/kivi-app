@@ -1,17 +1,28 @@
 # main.py
+import ctypes
+import platform
+import time
 import threading
 import uuid
 from collections import defaultdict
 
+if platform.system() == "Windows":
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 from kivy.app import App
-from kivy.clock import Clock
 from kivy.clock import Clock
 
 Clock.max_iteration = 1000
 
 from kivy.lang import Builder
 from kivy.graphics import Color, Line, RoundedRectangle
-from kivy.metrics import dp
+from kivy.metrics import dp, sp
 from kivy.properties import (
     BooleanProperty,
     ObjectProperty,
@@ -19,10 +30,12 @@ from kivy.properties import (
     ListProperty,
     NumericProperty,
 )
+from kivy.core.window import Window
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
+from kivy.uix.modalview import ModalView
 from kivy.uix.popup import Popup
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.spinner import Spinner
@@ -30,6 +43,27 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 
 from api_client import api_client, ApiError
+
+
+OPEN_MODALS = []
+_modal_open = ModalView.open
+_modal_dismiss = ModalView.dismiss
+
+
+def _tracked_modal_open(self, *args, **kwargs):
+    if self not in OPEN_MODALS:
+        OPEN_MODALS.append(self)
+    return _modal_open(self, *args, **kwargs)
+
+
+def _tracked_modal_dismiss(self, *args, **kwargs):
+    if self in OPEN_MODALS:
+        OPEN_MODALS.remove(self)
+    return _modal_dismiss(self, *args, **kwargs)
+
+
+ModalView.open = _tracked_modal_open
+ModalView.dismiss = _tracked_modal_dismiss
 
 
 # ---------- утилиты интерфейса ----------
@@ -449,15 +483,53 @@ class LoginScreen(Screen):
     login_input = ObjectProperty(None)
     password_input = ObjectProperty(None)
     message = StringProperty("")
+    message_kind = StringProperty("info")
+    login_loading = BooleanProperty(False)
+
+    def on_kv_post(self, *_):
+        Clock.schedule_once(lambda dt: self._setup_focus(), 0)
+
+    def on_pre_enter(self, *args):
+        Clock.schedule_once(lambda dt: self._focus_login(), 0.05)
+
+    def _setup_focus(self):
+        if not self.login_input or not self.password_input:
+            return
+        self.login_input.focus_next = self.password_input
+        self.password_input.focus_previous = self.login_input
+
+    def _focus_login(self):
+        if self.login_input:
+            self.login_input.focus = True
+
+    def submit_login_field(self):
+        if self.password_input:
+            self.password_input.focus = True
+
+    def submit_password_field(self):
+        self.do_login()
 
     def do_login(self):
+        if self.login_loading:
+            return
         username = (self.login_input.text or "").strip()
         password = (self.password_input.text or "").strip()
 
-        if not username or not password:
-            self.message = "Введите логин и пароль"
+        if not username:
+            self.message_kind = "error"
+            self.message = "Введите логин"
+            Clock.schedule_once(lambda dt: self._focus_login(), 0)
             return
 
+        if not password:
+            self.message_kind = "error"
+            self.message = "Введите логин и пароль"
+            if self.password_input:
+                Clock.schedule_once(lambda dt: setattr(self.password_input, "focus", True), 0)
+            return
+
+        self.login_loading = True
+        self.message_kind = "info"
         self.message = "Входим..."
 
         def worker():
@@ -467,7 +539,12 @@ class LoginScreen(Screen):
                 msg = f"Ошибка входа: {exc}"
 
                 def ui_fail(dt, msg=msg):
+                    self.login_loading = False
+                    self.message_kind = "error"
                     self.message = msg
+                    target = self.password_input if self.password_input.text else self.login_input
+                    if target:
+                        target.focus = True
 
                 Clock.schedule_once(ui_fail)
                 return
@@ -475,7 +552,9 @@ class LoginScreen(Screen):
             def ui_ok(dt):
                 app = App.get_running_app()
                 app.current_user = user
-                self.manager.current = "user_home"
+                self.login_loading = False
+                self.message = ""
+                app.navigate("user_home", reset=True)
 
             Clock.schedule_once(ui_ok)
 
@@ -612,19 +691,19 @@ class UserHomeScreen(Screen):
                 box_accepted.add_widget(make_inventory_label(line))
 
     def goto_transfers(self):
-        self.manager.current = "transfers"
+        App.get_running_app().navigate("transfers")
 
     def goto_forms(self):
-        self.manager.current = "forms_menu"
+        App.get_running_app().navigate("forms_menu")
 
     def goto_finance(self):
-        self.manager.current = "finance_account"
+        App.get_running_app().navigate("finance_account")
 
     def goto_voentorg(self):
-        self.manager.current = "voentorg"
+        App.get_running_app().navigate("voentorg")
 
     def goto_employee_panel(self):
-        self.manager.current = "employee_panel"
+        App.get_running_app().navigate("employee_panel")
 
 
 # ---------- ЭКРАН: ЛИЧНЫЙ КАБИНЕТ ----------
@@ -842,7 +921,7 @@ class FinanceAccountScreen(Screen):
         popup.open()
 
     def goto_home(self):
-        self.manager.current = "user_home"
+        App.get_running_app().back()
 
 
 # ---------- ЭКРАН: СПИСОК ПЕРЕДАЧ ----------
@@ -992,10 +1071,10 @@ class TransferListScreen(Screen):
         threading.Thread(target=worker, daemon=True).start()
 
     def goto_create(self):
-        self.manager.current = "transfer_create"
+        App.get_running_app().navigate("transfer_create")
 
     def goto_home(self):
-        self.manager.current = "user_home"
+        App.get_running_app().back()
 
 
 # ---------- ЭКРАН: СОЗДАНИЕ ПЕРЕДАЧИ ----------
@@ -1121,7 +1200,7 @@ class TransferCreateScreen(Screen):
         threading.Thread(target=worker, daemon=True).start()
 
     def goto_list(self):
-        self.manager.current = "transfers"
+        App.get_running_app().back()
 
 
 # ---------- ЭКРАН: МЕНЮ КНИГ / ФОРМ ----------
@@ -1144,7 +1223,7 @@ class FormsMenuScreen(Screen):
         app = App.get_running_app()
         view = app.root.get_screen("form_view")
         view.set_code_and_title(code, title)
-        app.root.current = "form_view"
+        app.navigate("form_view")
 
 
 # ---------- ЭКРАН: ПРОСМОТР КОНКРЕТНОЙ ФОРМЫ ----------
@@ -1290,15 +1369,15 @@ class VoentorgScreen(Screen):
 
     def handle_nav_action(self, action, payload):
         if action == "chevrons":
-            self.manager.current = "chevron_order"
+            App.get_running_app().navigate("chevron_order")
             return
         if action == "orders":
-            self.manager.current = "chevron_orders"
+            App.get_running_app().navigate("chevron_orders")
             return
         self.status_text = "Раздел будет подключен отдельной веткой Военторга."
 
     def goto_home(self):
-        self.manager.current = "user_home"
+        App.get_running_app().back()
 
 
 class ChevronOrdersScreen(Screen):
@@ -1414,10 +1493,10 @@ class ChevronOrdersScreen(Screen):
     def open_order(self, order_id):
         detail = self.manager.get_screen("chevron_order_detail")
         detail.open_order(order_id)
-        self.manager.current = "chevron_order_detail"
+        App.get_running_app().navigate("chevron_order_detail")
 
     def goto_voentorg(self):
-        self.manager.current = "voentorg"
+        App.get_running_app().back()
 
 
 class ChevronOrderDetailScreen(Screen):
@@ -1492,11 +1571,70 @@ class ChevronOrderDetailScreen(Screen):
         self.price_text = chevron_price_text(order)
         self.comment_text = "Комментарий клиента: " + (order.get("client_comment") or "нет")
         self.progress_text = f"Готовность: {int(order.get('progress_percent') or 0)}%"
-        self.stage_text = self._progress_steps_text(order.get("progress_steps") or [])
+        self.stage_text = ""
+        self._render_progress_steps(order.get("progress_steps") or [], status)
         self.history_text = self._history_text(data.get("history") or [])
         self.test_text = "Тестовый заказ. Средства не списывались" if order.get("is_test") else ""
         self.is_draft = status == "DRAFT"
         self.error_text = ""
+
+    def _render_progress_steps(self, steps, status):
+        box = self.ids.get("stage_steps_box")
+        if not box:
+            return
+        box.clear_widgets()
+        default_steps = [
+            {"code": "WAITING_PAYMENT", "title": "Оформлен"},
+            {"code": "EMBROIDERY", "title": "Вышивка"},
+            {"code": "CUTTING_PACKING", "title": "Комплектование"},
+            {"code": "DELIVERY", "title": "Доставка"},
+            {"code": "COMPLETED", "title": "Завершён"},
+        ]
+        rows = steps or default_steps
+        current_index = 0
+        for index, step in enumerate(rows):
+            if step.get("is_current") or step.get("code") == status:
+                current_index = index
+                break
+            if step.get("is_done"):
+                current_index = max(current_index, index + 1)
+
+        narrow = Window.width < dp(560)
+        box.orientation = "vertical" if narrow else "horizontal"
+        box.height = dp(38 * len(rows)) if narrow else dp(42)
+        box.spacing = dp(6)
+
+        for index, step in enumerate(rows):
+            title = step.get("title") or step.get("code") or ""
+            is_done = bool(step.get("is_done")) or index < current_index
+            is_current = bool(step.get("is_current")) or index == current_index
+            if status == "COMPLETED":
+                is_done = True
+                is_current = index == len(rows) - 1
+            bg = (0.45, 0.50, 0.30, 1) if is_done else ((0.92, 0.94, 0.86, 1) if is_current else (0.90, 0.90, 0.88, 1))
+            fg = (1, 1, 1, 1) if is_done else ((0.16, 0.18, 0.11, 1) if is_current else (0.42, 0.42, 0.42, 1))
+            label = Label(
+                text=title,
+                color=fg,
+                bold=is_done or is_current,
+                font_size=sp(13),
+                size_hint_y=None if narrow else 1,
+                height=dp(34),
+                halign="center",
+                valign="middle",
+                padding=(dp(8), 0),
+            )
+            label.bind(size=lambda inst, *_: setattr(inst, "text_size", inst.size))
+            with label.canvas.before:
+                Color(*bg)
+                label._stage_bg = RoundedRectangle(pos=label.pos, size=label.size, radius=[dp(8)])
+
+            def sync(instance, *_):
+                instance._stage_bg.pos = instance.pos
+                instance._stage_bg.size = instance.size
+
+            label.bind(pos=sync, size=sync)
+            box.add_widget(label)
 
     def _progress_steps_text(self, steps):
         if not steps:
@@ -1594,7 +1732,7 @@ class ChevronOrderDetailScreen(Screen):
                 confirm.saved = False
                 confirm.save_button_text = "Обновить черновик"
                 confirm.draft_status_text = f"Черновик восстановлен. Номер заказа: {order.get('order_number') or ''}"
-                self.manager.current = "chevron_quote_confirm"
+                App.get_running_app().navigate("chevron_quote_confirm")
 
             Clock.schedule_once(ui_ok)
 
@@ -1616,7 +1754,7 @@ class ChevronOrderDetailScreen(Screen):
         return selected
 
     def goto_orders(self):
-        self.manager.current = "chevron_orders"
+        App.get_running_app().back()
 
 
 class ChevronOrderScreen(Screen):
@@ -1674,10 +1812,10 @@ class ChevronOrderScreen(Screen):
             return
         configurator = self.manager.get_screen("chevron_configurator")
         configurator.open_kit(payload.get("code") or "", payload.get("title") or "Комплект")
-        self.manager.current = "chevron_configurator"
+        App.get_running_app().navigate("chevron_configurator")
 
     def goto_voentorg(self):
-        self.manager.current = "voentorg"
+        App.get_running_app().back()
 
 
 class ChevronKitDetailScreen(Screen):
@@ -1727,13 +1865,13 @@ class ChevronKitDetailScreen(Screen):
         threading.Thread(target=worker, daemon=True).start()
 
     def choose_other(self):
-        self.manager.current = "chevron_order"
+        App.get_running_app().back()
 
     def next_step(self):
         self.status_text = "Конфигуратор будет во втором коммите."
 
     def goto_chevrons(self):
-        self.manager.current = "chevron_order"
+        App.get_running_app().back()
 
 
 class ChevronConfiguratorScreen(Screen):
@@ -1983,7 +2121,7 @@ class ChevronConfiguratorScreen(Screen):
             self.price_available,
             self.price_text,
         )
-        self.manager.current = "chevron_names_draft"
+        App.get_running_app().navigate("chevron_names_draft")
 
     def confirm_choose_other(self):
         content = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(10))
@@ -2001,13 +2139,13 @@ class ChevronConfiguratorScreen(Screen):
             popup.dismiss()
             self.selected_options = {}
             self.kit_detail = {}
-            self.manager.current = "chevron_order"
+            App.get_running_app().navigate("chevron_order")
 
         ok.bind(on_release=do_reset)
         popup.open()
 
     def goto_chevrons(self):
-        self.manager.current = "chevron_order"
+        App.get_running_app().back()
 
 
 class ChevronNamesDraftScreen(Screen):
@@ -2202,7 +2340,7 @@ class ChevronNamesDraftScreen(Screen):
                     lines,
                     data,
                 )
-                self.manager.current = "chevron_quote_confirm"
+                App.get_running_app().navigate("chevron_quote_confirm")
 
             Clock.schedule_once(ui_ok)
 
@@ -2218,7 +2356,7 @@ class ChevronNamesDraftScreen(Screen):
         return tokens
 
     def goto_configurator(self):
-        self.manager.current = "chevron_configurator"
+        App.get_running_app().back()
 
 
 class ChevronQuoteConfirmScreen(Screen):
@@ -2289,7 +2427,7 @@ class ChevronQuoteConfirmScreen(Screen):
         self.payment_method = method
 
     def goto_names(self):
-        self.manager.current = "chevron_names_draft"
+        App.get_running_app().back()
 
     def save_draft(self):
         if self.saving or self.saved:
@@ -2609,7 +2747,7 @@ class ChevronAdminPricingScreen(Screen):
         return None if value == "" else value
 
     def goto_employee(self):
-        self.manager.current = "employee_panel"
+        App.get_running_app().back()
 
 
 class EmployeeOrdersScreen(Screen):
@@ -2731,13 +2869,13 @@ class EmployeeOrdersScreen(Screen):
     def open_order(self, order_id):
         detail = self.manager.get_screen("employee_order_detail")
         detail.open_order(order_id, self.role_code, self.role_title)
-        self.manager.current = "employee_order_detail"
+        App.get_running_app().navigate("employee_order_detail")
 
     def refresh_after_action(self):
         self.load_orders()
 
     def goto_employee(self):
-        self.manager.current = "employee_panel"
+        App.get_running_app().back()
 
 
 class EmployeeOrderDetailScreen(Screen):
@@ -2949,7 +3087,7 @@ class EmployeeOrderDetailScreen(Screen):
             pass
 
     def goto_queue(self):
-        self.manager.current = "employee_orders"
+        App.get_running_app().back()
 
 
 class EmployeeAdminUsersScreen(Screen):
@@ -3068,10 +3206,10 @@ class EmployeeAdminUsersScreen(Screen):
     def open_user(self, user_id):
         detail = self.manager.get_screen("employee_admin_user_detail")
         detail.open_user(user_id)
-        self.manager.current = "employee_admin_user_detail"
+        App.get_running_app().navigate("employee_admin_user_detail")
 
     def goto_employee(self):
-        self.manager.current = "employee_panel"
+        App.get_running_app().back()
 
 
 class EmployeeAdminUserDetailScreen(Screen):
@@ -3167,7 +3305,7 @@ class EmployeeAdminUserDetailScreen(Screen):
         threading.Thread(target=worker, daemon=True).start()
 
     def goto_users(self):
-        self.manager.current = "employee_admin_users"
+        App.get_running_app().back()
 
 
 class EmployeePanelScreen(Screen):
@@ -3235,31 +3373,74 @@ class EmployeePanelScreen(Screen):
             self.goto_admin_pricing()
             return
         if action == "employee_admin_users":
-            self.manager.current = "employee_admin_users"
+            App.get_running_app().navigate("employee_admin_users")
             return
         if action == "employee_role":
             screen = self.manager.get_screen("employee_orders")
             screen.open_role(payload or {})
-            self.manager.current = "employee_orders"
+            App.get_running_app().navigate("employee_orders")
 
     def goto_admin_pricing(self):
-        self.manager.current = "chevron_admin_pricing"
+        App.get_running_app().navigate("chevron_admin_pricing")
 
     def goto_home(self):
-        self.manager.current = "user_home"
+        App.get_running_app().back()
 
 
 # ---------- ROOT & APP ----------
 
 
 class RootWidget(ScreenManager):
-    pass
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.history = []
+        self._last_current = ""
+        self._suppress_history = False
+
+    def on_current(self, instance, value):
+        if self._suppress_history:
+            self._last_current = value
+            return
+        previous = self._last_current
+        if previous and previous != value:
+            if not self.history or self.history[-1] != previous:
+                self.history.append(previous)
+        self._last_current = value
+
+    def navigate(self, screen_name, reset=False):
+        if screen_name == self.current and not reset:
+            return
+        if reset:
+            self.history = []
+            self._suppress_history = True
+            self.current = screen_name
+            self._last_current = screen_name
+            self._suppress_history = False
+            return
+        self.current = screen_name
+
+    def back(self):
+        if not self.history:
+            return False
+        previous = self.history.pop()
+        if previous == self.current:
+            return self.back()
+        self._suppress_history = True
+        self.current = previous
+        self._last_current = previous
+        self._suppress_history = False
+        return True
+
+    def clear_history(self):
+        self.history = []
 
 
 class SixnerInventoryApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.current_user = None
+        self._last_exit_prompt = 0
+        self._last_back_key_at = 0
 
     def build(self):
         self.title = "Учёт имущества"
@@ -3286,7 +3467,62 @@ class SixnerInventoryApp(App):
         sm.add_widget(TransferCreateScreen(name="transfer_create"))
         sm.add_widget(FormsMenuScreen(name="forms_menu"))
         sm.add_widget(FormViewScreen(name="form_view"))
+        Window.bind(on_keyboard=self._on_keyboard)
         return sm
+
+    def navigate(self, screen_name, reset=False):
+        if self.root:
+            self.root.navigate(screen_name, reset=reset)
+
+    def back(self):
+        return self.handle_back()
+
+    def logout(self):
+        self.current_user = None
+        api_client.api_token = None
+        api_client.user_id = None
+        if self.root:
+            self.root.navigate("login", reset=True)
+
+    def handle_back(self):
+        self._dismiss_stale_modals()
+        if OPEN_MODALS:
+            OPEN_MODALS[-1].dismiss()
+            return True
+
+        screen = self.root.current if self.root else ""
+        if self.root and self.root.back():
+            self._last_exit_prompt = 0
+            return True
+
+        if screen in ("login", "user_home"):
+            now = time.monotonic()
+            if now - self._last_exit_prompt <= 2:
+                return False
+            self._last_exit_prompt = now
+            current_screen = self.root.current_screen if self.root else None
+            if hasattr(current_screen, "message"):
+                current_screen.message = "Нажмите ещё раз для выхода"
+                if hasattr(current_screen, "message_kind"):
+                    current_screen.message_kind = "info"
+            elif hasattr(current_screen, "status_text"):
+                current_screen.status_text = "Нажмите ещё раз для выхода"
+            return True
+
+        self.navigate("user_home", reset=True)
+        return True
+
+    def _on_keyboard(self, window, key, scancode, codepoint, modifier):
+        if key not in (27, 1001):
+            return False
+        now = time.monotonic()
+        if now - self._last_back_key_at < 0.15:
+            return True
+        self._last_back_key_at = now
+        return self.handle_back()
+
+    def _dismiss_stale_modals(self):
+        OPEN_MODALS[:] = [modal for modal in OPEN_MODALS if modal.parent is not None]
 
 
 if __name__ == "__main__":
