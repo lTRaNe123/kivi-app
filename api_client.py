@@ -439,6 +439,9 @@ class ApiClient:
         option_codes: List[str],
         lines: List[Dict[str, Any]],
         idempotency_key: str,
+        payment_method: str = "",
+        comment: str = "",
+        draft_order_id: int = 0,
     ) -> Dict[str, Any]:
         """
         POST /api/chevron_order_create.php
@@ -447,17 +450,18 @@ class ApiClient:
         if not self.user_id:
             raise ApiError("Пользователь не авторизован")
 
-        payload = self._request_json(
-            "POST",
-            "chevron_order_create.php",
-            data={
-                "kit_code": kit_code,
-                "option_codes": json.dumps(option_codes, ensure_ascii=False),
-                "lines": json.dumps(lines, ensure_ascii=False),
-                "status": "DRAFT",
-                "idempotency_key": idempotency_key,
-            },
-        )
+        data = {
+            "kit_code": kit_code,
+            "option_codes": json.dumps(option_codes, ensure_ascii=False),
+            "lines": json.dumps(lines, ensure_ascii=False),
+            "status": "DRAFT",
+            "payment_method": payment_method,
+            "comment": comment,
+            "idempotency_key": idempotency_key,
+        }
+        if draft_order_id:
+            data["draft_order_id"] = int(draft_order_id)
+        payload = self._request_json("POST", "chevron_order_create.php", data=data)
         if not isinstance(payload.get("order") or {}, dict):
             raise ApiError("API заказа не вернул order")
         return payload
@@ -469,6 +473,8 @@ class ApiClient:
         lines: List[Dict[str, Any]],
         idempotency_key: str,
         payment_method: str,
+        comment: str = "",
+        draft_order_id: int = 0,
     ) -> Dict[str, Any]:
         """
         POST /api/chevron_order_create.php
@@ -477,18 +483,18 @@ class ApiClient:
         if not self.user_id:
             raise ApiError("Пользователь не авторизован")
 
-        payload = self._request_json(
-            "POST",
-            "chevron_order_create.php",
-            data={
-                "kit_code": kit_code,
-                "option_codes": json.dumps(option_codes, ensure_ascii=False),
-                "lines": json.dumps(lines, ensure_ascii=False),
-                "status": "TEST_ORDER",
-                "payment_method": payment_method,
-                "idempotency_key": idempotency_key,
-            },
-        )
+        data = {
+            "kit_code": kit_code,
+            "option_codes": json.dumps(option_codes, ensure_ascii=False),
+            "lines": json.dumps(lines, ensure_ascii=False),
+            "status": "TEST_ORDER",
+            "payment_method": payment_method,
+            "comment": comment,
+            "idempotency_key": idempotency_key,
+        }
+        if draft_order_id:
+            data["draft_order_id"] = int(draft_order_id)
+        payload = self._request_json("POST", "chevron_order_create.php", data=data)
         if not isinstance(payload.get("order") or {}, dict):
             raise ApiError("API заказа не вернул order")
         return payload
@@ -498,6 +504,7 @@ class ApiClient:
         status: str = "",
         page: int = 1,
         limit: int = 20,
+        filter_code: str = "",
     ) -> Dict[str, Any]:
         """
         GET /api/chevron_orders.php
@@ -509,7 +516,9 @@ class ApiClient:
             "page": page,
             "limit": limit,
         }
-        if status:
+        if filter_code:
+            params["filter"] = filter_code
+        elif status:
             params["status"] = status
         payload = self._request_json("GET", "chevron_orders.php", params=params)
         if not isinstance(payload.get("orders") or [], list):

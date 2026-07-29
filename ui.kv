@@ -530,16 +530,29 @@
             valign: "middle"
             text_size: self.size
 
-        Label:
-            text: root.meta
-            color: 0.38, 0.38, 0.38, 1
-            font_size: "12sp"
-            halign: "left"
-            valign: "middle"
-            text_size: self.size
+        BoxLayout:
+            size_hint_y: None
+            height: dp(22)
+
+            Label:
+                text: root.meta
+                color: 0.38, 0.38, 0.38, 1
+                font_size: "12sp"
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+
+            Label:
+                text: root.progress_text
+                color: 0.45, 0.50, 0.30, 1
+                bold: True
+                font_size: "12sp"
+                halign: "right"
+                valign: "middle"
+                text_size: self.size
 
         Label:
-            text: root.price_text
+            text: root.price_text + ((" · " + root.test_text) if root.test_text else "")
             color: 0.20, 0.20, 0.20, 1
             font_size: "12sp"
             halign: "left"
@@ -1062,9 +1075,19 @@
                 background_down: ""
                 bold: True
                 font_size: "12sp"
-                background_color: (0.04, 0.04, 0.04, 1) if root.active_status == "" else (0.86, 0.86, 0.84, 1)
-                color: (1, 1, 1, 1) if root.active_status == "" else (0.08, 0.08, 0.08, 1)
-                on_release: root.select_status("")
+                background_color: (0.04, 0.04, 0.04, 1) if root.active_filter == "" else (0.86, 0.86, 0.84, 1)
+                color: (1, 1, 1, 1) if root.active_filter == "" else (0.08, 0.08, 0.08, 1)
+                on_release: root.select_filter("")
+
+            Button:
+                text: "Активные"
+                background_normal: ""
+                background_down: ""
+                bold: True
+                font_size: "12sp"
+                background_color: (0.04, 0.04, 0.04, 1) if root.active_filter == "active" else (0.86, 0.86, 0.84, 1)
+                color: (1, 1, 1, 1) if root.active_filter == "active" else (0.08, 0.08, 0.08, 1)
+                on_release: root.select_filter("active")
 
             Button:
                 text: "Черновики"
@@ -1072,19 +1095,9 @@
                 background_down: ""
                 bold: True
                 font_size: "12sp"
-                background_color: (0.04, 0.04, 0.04, 1) if root.active_status == "DRAFT" else (0.86, 0.86, 0.84, 1)
-                color: (1, 1, 1, 1) if root.active_status == "DRAFT" else (0.08, 0.08, 0.08, 1)
-                on_release: root.select_status("DRAFT")
-
-            Button:
-                text: "В работе"
-                background_normal: ""
-                background_down: ""
-                bold: True
-                font_size: "12sp"
-                background_color: (0.04, 0.04, 0.04, 1) if root.active_status == "IN_WORK" else (0.86, 0.86, 0.84, 1)
-                color: (1, 1, 1, 1) if root.active_status == "IN_WORK" else (0.08, 0.08, 0.08, 1)
-                on_release: root.select_status("IN_WORK")
+                background_color: (0.04, 0.04, 0.04, 1) if root.active_filter == "drafts" else (0.86, 0.86, 0.84, 1)
+                color: (1, 1, 1, 1) if root.active_filter == "drafts" else (0.08, 0.08, 0.08, 1)
+                on_release: root.select_filter("drafts")
 
         BoxLayout:
             size_hint_y: None
@@ -1092,24 +1105,14 @@
             spacing: dp(6)
 
             Button:
-                text: "Готовые"
-                background_normal: ""
-                background_down: ""
-                bold: True
-                font_size: "12sp"
-                background_color: (0.04, 0.04, 0.04, 1) if root.active_status == "READY" else (0.86, 0.86, 0.84, 1)
-                color: (1, 1, 1, 1) if root.active_status == "READY" else (0.08, 0.08, 0.08, 1)
-                on_release: root.select_status("READY")
-
-            Button:
                 text: "Завершённые"
                 background_normal: ""
                 background_down: ""
                 bold: True
                 font_size: "12sp"
-                background_color: (0.04, 0.04, 0.04, 1) if root.active_status == "COMPLETED" else (0.86, 0.86, 0.84, 1)
-                color: (1, 1, 1, 1) if root.active_status == "COMPLETED" else (0.08, 0.08, 0.08, 1)
-                on_release: root.select_status("COMPLETED")
+                background_color: (0.04, 0.04, 0.04, 1) if root.active_filter == "completed" else (0.86, 0.86, 0.84, 1)
+                color: (1, 1, 1, 1) if root.active_filter == "completed" else (0.08, 0.08, 0.08, 1)
+                on_release: root.select_filter("completed")
 
         RecycleView:
             id: orders_list
@@ -1191,10 +1194,22 @@
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(116)
+                    height: dp(184)
 
                     SectionLabel:
                         text: root.status_text
+
+                    FinePrint:
+                        text: root.progress_text
+                        color: 0.45, 0.50, 0.30, 1
+
+                    FinePrint:
+                        text: root.stage_text
+                        color: 0.28, 0.28, 0.28, 1
+
+                    FinePrint:
+                        text: root.test_text
+                        color: 0.45, 0.50, 0.30, 1
 
                     FinePrint:
                         text: root.kit_text
@@ -1234,6 +1249,30 @@
 
                     FinePrint:
                         text: root.payment_text
+                        color: 0.28, 0.28, 0.28, 1
+
+                CardBox:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: dp(92)
+
+                    SectionLabel:
+                        text: "Комментарий"
+
+                    FinePrint:
+                        text: root.comment_text
+                        color: 0.28, 0.28, 0.28, 1
+
+                CardBox:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: dp(150)
+
+                    SectionLabel:
+                        text: "История"
+
+                    FinePrint:
+                        text: root.history_text
                         color: 0.28, 0.28, 0.28, 1
 
         FinePrint:
@@ -1805,6 +1844,20 @@
                 bold: True
                 font_size: "13sp"
                 on_release: root.set_payment_method("ST")
+
+        TextInput:
+            text: root.comment_text
+            hint_text: "Комментарий к заказу"
+            multiline: False
+            background_color: 0.07, 0.14, 0.25, 1
+            foreground_color: 1, 1, 1, 1
+            hint_text_color: 0.58, 0.67, 0.78, 1
+            cursor_color: 1, 1, 1, 1
+            padding: dp(10), dp(12)
+            font_size: "14sp"
+            size_hint_y: None
+            height: dp(46)
+            on_text: root.comment_text = self.text
 
         Label:
             text: root.draft_status_text

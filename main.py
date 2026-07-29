@@ -83,23 +83,29 @@ def make_table_label(text: str, width: int) -> Label:
 CHEVRON_STATUS_LABELS = {
     "DRAFT": "Черновик",
     "WAITING_PAYMENT": "Ожидает оплаты",
+    "EMBROIDERY": "Вышивка",
+    "CUTTING_PACKING": "Комплектование",
+    "DELIVERY": "Доставка",
+    "COMPLETED": "Завершён",
+    "CANCELLED": "Отменён",
     "PAID": "Оплачен",
     "IN_WORK": "В работе",
     "READY": "Готов",
     "DELIVERING": "Доставляется",
-    "COMPLETED": "Завершён",
-    "CANCELLED": "Отменён",
 }
 
 CHEVRON_STATUS_COLORS = {
     "DRAFT": [0.58, 0.58, 0.58, 1],
     "WAITING_PAYMENT": [0.86, 0.56, 0.20, 1],
+    "EMBROIDERY": [0.45, 0.50, 0.30, 1],
+    "CUTTING_PACKING": [0.45, 0.50, 0.30, 1],
+    "DELIVERY": [0.45, 0.50, 0.30, 1],
+    "COMPLETED": [0.12, 0.44, 0.26, 1],
+    "CANCELLED": [0.70, 0.20, 0.20, 1],
     "PAID": [0.16, 0.48, 0.78, 1],
     "IN_WORK": [0.20, 0.42, 0.78, 1],
     "READY": [0.20, 0.55, 0.32, 1],
     "DELIVERING": [0.40, 0.34, 0.68, 1],
-    "COMPLETED": [0.12, 0.44, 0.26, 1],
-    "CANCELLED": [0.70, 0.20, 0.20, 1],
 }
 
 EMPLOYEE_STAGE_LABELS = {
@@ -133,6 +139,10 @@ def chevron_price_text(payload):
     if payload.get("total_st") is not None:
         parts.append(f"{payload.get('total_st')} ST")
     return " / ".join(parts) if parts else "Стоимость не назначена"
+
+
+def chevron_payment_label(method):
+    return {"RUB": "Рубли", "ST": "СТ"}.get(method or "", method or "не выбран")
 
 
 def employee_stage_label(stage):
@@ -280,6 +290,8 @@ class ChevronOrderListRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
     meta = StringProperty("")
     price_text = StringProperty("")
     status_text = StringProperty("")
+    progress_text = StringProperty("")
+    test_text = StringProperty("")
     status_color = ListProperty([0.55, 0.55, 0.55, 1])
 
     def refresh_view_attrs(self, rv, index, data):
@@ -290,6 +302,8 @@ class ChevronOrderListRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
         self.meta = data.get("meta") or ""
         self.price_text = data.get("price_text") or ""
         self.status_text = data.get("status_text") or ""
+        self.progress_text = data.get("progress_text") or ""
+        self.test_text = data.get("test_text") or ""
         self.status_color = data.get("status_color") or [0.55, 0.55, 0.55, 1]
         return result
 
@@ -1289,36 +1303,37 @@ class VoentorgScreen(Screen):
 
 class ChevronOrdersScreen(Screen):
     status_text = StringProperty("")
-    active_status = StringProperty("")
+    active_filter = StringProperty("")
     loading = BooleanProperty(False)
     page = NumericProperty(1)
     has_more = BooleanProperty(False)
 
     FILTERS = [
         ("", "Все"),
-        ("DRAFT", "Черновики"),
-        ("IN_WORK", "В работе"),
-        ("READY", "Готовые"),
-        ("COMPLETED", "Завершённые"),
+        ("active", "Активные"),
+        ("drafts", "Черновики"),
+        ("completed", "Завершённые"),
     ]
 
     def on_pre_enter(self, *args):
         if not self.ids.orders_list.data:
             self.load_orders()
 
-    def select_status(self, status):
-        self.active_status = status
+    def select_filter(self, filter_code):
+        self.active_filter = filter_code
         self.page = 1
         self.load_orders()
 
     def load_orders(self):
+        if self.loading:
+            return
         self.loading = True
         self.status_text = "Загружаем заказы..."
         self.ids.orders_list.data = []
 
         def worker():
             try:
-                data = api_client.get_chevron_orders(self.active_status, page=1, limit=20)
+                data = api_client.get_chevron_orders(page=1, limit=20, filter_code=self.active_filter)
             except Exception as exc:
                 msg = f"Ошибка заказов: {exc}"
 
@@ -1351,7 +1366,7 @@ class ChevronOrdersScreen(Screen):
 
         def worker():
             try:
-                data = api_client.get_chevron_orders(self.active_status, page=next_page, limit=20)
+                data = api_client.get_chevron_orders(page=next_page, limit=20, filter_code=self.active_filter)
             except Exception as exc:
                 msg = f"Ошибка заказов: {exc}"
 
@@ -1379,15 +1394,21 @@ class ChevronOrdersScreen(Screen):
 
     def _row_payload(self, order):
         created = (order.get("created_at") or "").split(" ")[0]
-        lines_count = int(order.get("lines_count") or 0)
+        total_quantity = int(order.get("total_quantity") or order.get("lines_count") or 0)
+        code = order.get("customer_status_code") or order.get("status")
+        title = order.get("customer_status_title") or chevron_status_label(code)
+        progress = int(order.get("progress_percent") or 0)
+        test = "Тестовый заказ" if (order.get("pricing_mode") or "").upper() == "TEST" else ""
         return {
             "order_id": int(order.get("id") or 0),
             "order_number": order.get("order_number") or "",
             "kit_title": order.get("kit_title") or "",
-            "meta": f"{created} · строк: {lines_count}",
+            "meta": f"{created} · количество: {total_quantity}",
             "price_text": chevron_price_text(order),
-            "status_text": chevron_status_label(order.get("status")),
-            "status_color": chevron_status_color(order.get("status")),
+            "status_text": title,
+            "progress_text": f"Прогресс: {progress}%",
+            "test_text": test,
+            "status_color": chevron_status_color(code),
         }
 
     def open_order(self, order_id):
@@ -1408,6 +1429,11 @@ class ChevronOrderDetailScreen(Screen):
     lines_text = StringProperty("")
     payment_text = StringProperty("Способ оплаты: не выбран")
     price_text = StringProperty("Стоимость не назначена")
+    comment_text = StringProperty("Комментарий клиента: нет")
+    progress_text = StringProperty("")
+    stage_text = StringProperty("")
+    history_text = StringProperty("")
+    test_text = StringProperty("")
     error_text = StringProperty("")
     loading = BooleanProperty(False)
     is_draft = BooleanProperty(False)
@@ -1451,9 +1477,9 @@ class ChevronOrderDetailScreen(Screen):
         kit = data.get("kit") or {}
         options = data.get("options") or []
         lines = data.get("lines") or []
-        status = order.get("status")
+        status = order.get("customer_status_code") or order.get("status")
         self.title_text = order.get("order_number") or "Заказ"
-        self.status_text = f"Статус: {chevron_status_label(status)}"
+        self.status_text = f"Статус: {order.get('customer_status_title') or chevron_status_label(status)}"
         created = order.get("created_at") or ""
         self.kit_text = f"Дата: {created}\nКомплект: {kit.get('title') or ''}"
         self.config_text = "\n".join(
@@ -1462,10 +1488,38 @@ class ChevronOrderDetailScreen(Screen):
         self.lines_text = "\n".join(
             f"{line.get('text_value')} × {line.get('quantity')}" for line in lines
         ) or "Строки не найдены"
-        self.payment_text = "Способ оплаты: " + (order.get("payment_method") or "не выбран")
+        self.payment_text = "Способ оплаты: " + chevron_payment_label(order.get("payment_method"))
         self.price_text = chevron_price_text(order)
+        self.comment_text = "Комментарий клиента: " + (order.get("client_comment") or "нет")
+        self.progress_text = f"Готовность: {int(order.get('progress_percent') or 0)}%"
+        self.stage_text = self._progress_steps_text(order.get("progress_steps") or [])
+        self.history_text = self._history_text(data.get("history") or [])
+        self.test_text = "Тестовый заказ. Средства не списывались" if order.get("is_test") else ""
         self.is_draft = status == "DRAFT"
         self.error_text = ""
+
+    def _progress_steps_text(self, steps):
+        if not steps:
+            return "Оформлен → Вышивка → Комплектование → Доставка → Завершён"
+        parts = []
+        for step in steps:
+            title = step.get("title") or step.get("code") or ""
+            if step.get("is_current"):
+                parts.append(f"[{title}]")
+            elif step.get("is_done"):
+                parts.append(f"✓ {title}")
+            else:
+                parts.append(title)
+        return " → ".join(parts)
+
+    def _history_text(self, history):
+        lines = []
+        for item in history:
+            title = item.get("title") or ""
+            created = (item.get("created_at") or "").split(" ")[0]
+            if title:
+                lines.append(f"{created} · {title}" if created else title)
+        return "\n".join(lines) or "История пока пуста"
 
     def continue_draft(self):
         if not self.is_draft or not self.detail:
@@ -1476,6 +1530,8 @@ class ChevronOrderDetailScreen(Screen):
         kit_code = config.get("kit_code") or kit.get("code") or ""
         option_tokens = config.get("option_codes") or []
         lines = config.get("lines") or self.detail.get("lines") or []
+        payment_method = config.get("payment_method") or order.get("payment_method") or "RUB"
+        comment = config.get("comment") or order.get("client_comment") or ""
         self.loading = True
         self.error_text = "Восстанавливаем черновик..."
 
@@ -1532,8 +1588,11 @@ class ChevronOrderDetailScreen(Screen):
                     quote_payload,
                 )
                 order = self.detail.get("order") or {}
-                confirm.saved = True
-                confirm.save_button_text = "Черновик сохранён"
+                confirm.draft_order_id = int(order.get("id") or 0)
+                confirm.payment_method = payment_method if payment_method in ("RUB", "ST") else "RUB"
+                confirm.comment_text = comment
+                confirm.saved = False
+                confirm.save_button_text = "Обновить черновик"
                 confirm.draft_status_text = f"Черновик восстановлен. Номер заказа: {order.get('order_number') or ''}"
                 self.manager.current = "chevron_quote_confirm"
 
@@ -2169,6 +2228,7 @@ class ChevronQuoteConfirmScreen(Screen):
     price_text = StringProperty("Стоимость пока не назначена")
     pricing_label = StringProperty("")
     draft_status_text = StringProperty("")
+    comment_text = StringProperty("")
     save_button_text = StringProperty("Сохранить черновик")
     checkout_button_text = StringProperty("Оформить тестовый заказ")
     payment_method = StringProperty("RUB")
@@ -2180,6 +2240,7 @@ class ChevronQuoteConfirmScreen(Screen):
     order_lines = ListProperty([])
     idempotency_key = StringProperty("")
     checkout_idempotency_key = StringProperty("")
+    draft_order_id = NumericProperty(0)
     quote = ObjectProperty({})
 
     def set_quote(self, kit_title, kit_code, summary_text, option_codes, lines, quote_payload):
@@ -2195,6 +2256,8 @@ class ChevronQuoteConfirmScreen(Screen):
         )
         self.idempotency_key = uuid.uuid4().hex
         self.checkout_idempotency_key = uuid.uuid4().hex
+        self.draft_order_id = 0
+        self.comment_text = ""
         self.saved = False
         self.saving = False
         self.checking_out = False
@@ -2242,6 +2305,9 @@ class ChevronQuoteConfirmScreen(Screen):
                     list(self.option_codes),
                     list(self.order_lines),
                     self.idempotency_key,
+                    self.payment_method,
+                    self.comment_text,
+                    self.draft_order_id,
                 )
             except Exception as exc:
                 msg = f"Не удалось сохранить черновик: {exc}"
@@ -2260,6 +2326,7 @@ class ChevronQuoteConfirmScreen(Screen):
                 self.saving = False
                 self.saved = True
                 self.save_button_text = "Черновик сохранён"
+                self.draft_order_id = int(order.get("id") or self.draft_order_id or 0)
                 self.draft_status_text = f"Черновик сохранён. Номер заказа: {number}"
 
             Clock.schedule_once(ui_ok)
@@ -2287,6 +2354,8 @@ class ChevronQuoteConfirmScreen(Screen):
                     list(self.order_lines),
                     self.checkout_idempotency_key,
                     self.payment_method,
+                    self.comment_text,
+                    self.draft_order_id,
                 )
             except Exception as exc:
                 msg = f"Не удалось оформить тестовый заказ: {exc}"
