@@ -3475,13 +3475,19 @@ class SixnerInventoryApp(App):
     def _validate_startup_ui(self, root):
         if root is None:
             raise RuntimeError("Root widget was not created")
+        if not isinstance(root, ScreenManager):
+            raise RuntimeError(
+                f"Startup root must be ScreenManager, got {root.__class__.__name__}"
+            )
         screen_names = list(root.screen_names)
-        if not screen_names:
-            raise RuntimeError("ScreenManager has no screens after startup")
+        if "login" not in screen_names:
+            raise RuntimeError(
+                f"Startup ScreenManager missing login screen; screens={screen_names}"
+            )
         if root.current != "login":
-            raise RuntimeError(f"Unexpected startup screen: {root.current}")
-        if not root.children:
-            raise RuntimeError("Root widget has no child widgets after startup")
+            raise RuntimeError(
+                f"Unexpected startup screen: {root.current}; screens={screen_names}"
+            )
 
     def navigate(self, screen_name, reset=False):
         if self.root:
