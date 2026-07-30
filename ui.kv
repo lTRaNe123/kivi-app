@@ -16,7 +16,10 @@
     padding: dp(20), dp(24)
     spacing: dp(10)
     size_hint_x: None
-    width: max(dp(280), min(self.parent.width - dp(32), dp(1180))) if self.parent else dp(360)
+    size_hint_y: 1
+    opacity: 1
+    disabled: False
+    width: max(dp(1), min((self.parent.width - dp(32)) if self.parent and self.parent.width > dp(32) else dp(360), dp(1180)))
     pos_hint: {"center_x": 0.5}
 
 
@@ -702,6 +705,9 @@
     password_input: password_input
 
     FloatLayout:
+        size_hint: 1, 1
+        opacity: 1
+        disabled: False
         canvas.before:
             Color:
                 rgba: 0.985, 0.985, 0.975, 1
@@ -713,7 +719,9 @@
             orientation: "vertical"
             spacing: dp(16)
             size_hint: None, None
-            width: min(root.width - dp(56), dp(280))
+            opacity: 1
+            disabled: False
+            width: max(dp(1), min((root.width - dp(56)) if root.width > dp(56) else dp(280), dp(320)))
             height: dp(266)
             pos_hint: {"center_x": 0.5, "center_y": 0.52}
 

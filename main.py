@@ -3446,6 +3446,7 @@ class SixnerInventoryApp(App):
 
     def build(self):
         self.title = "Учёт имущества"
+        Window.clearcolor = (0.965, 0.965, 0.95, 1)
         Builder.load_file("ui.kv")
         sm = RootWidget(transition=FadeTransition())
         sm.add_widget(LoginScreen(name="login"))
@@ -3479,6 +3480,31 @@ class SixnerInventoryApp(App):
         self._last_exit_prompt = 0
         self._last_back_key_at = 0
         self._allow_close_events_at = time.monotonic() + 0.5
+        Clock.schedule_once(self._log_ui_ready, 0)
+
+    def _log_ui_ready(self, *_):
+        screen = self.root.current_screen if self.root else None
+        child = screen.children[0] if screen and screen.children else None
+        current = self.root.current if self.root else None
+        children_count = len(screen.children) if screen else 0
+        if (
+            current != "login"
+            or screen is None
+            or children_count == 0
+            or screen.width <= 0
+            or screen.height <= 0
+            or screen.opacity <= 0
+        ):
+            raise RuntimeError(
+                f"UI startup failed: screen={current} "
+                f"class={screen.__class__.__name__ if screen else None} "
+                f"children={children_count} "
+                f"size={screen.size if screen else None} "
+                f"opacity={screen.opacity if screen else None} "
+                f"first_child_size={child.size if child else None} "
+                f"ids={len(screen.ids) if screen else 0}"
+            )
+        Logger.info(f"SixnerInventoryApp: UI ready: screen={current} children={children_count}")
 
     def _validate_startup_ui(self, root):
         if root is None:
