@@ -3397,8 +3397,9 @@ class RootWidget(ScreenManager):
         self.history = []
         self._last_current = ""
         self._suppress_history = False
+        self.fbind("current", self._track_current_for_history)
 
-    def on_current(self, instance, value):
+    def _track_current_for_history(self, instance, value):
         if self._suppress_history:
             self._last_current = value
             return
@@ -3521,6 +3522,27 @@ class SixnerInventoryApp(App):
         if root.current != "login":
             raise RuntimeError(
                 f"Unexpected startup screen: {root.current}; screens={screen_names}"
+            )
+        current_screen = root.current_screen
+        login_screen = root.get_screen("login")
+        if current_screen is None:
+            raise RuntimeError(
+                f"Startup ScreenManager current_screen is None; screens={screen_names}"
+            )
+        if current_screen is not login_screen:
+            raise RuntimeError(
+                f"Startup current_screen mismatch: current={root.current} "
+                f"actual={current_screen.name}; screens={screen_names}"
+            )
+        if current_screen.name != "login":
+            raise RuntimeError(
+                f"Unexpected current_screen name: {current_screen.name}; screens={screen_names}"
+            )
+        if not current_screen.children:
+            raise RuntimeError("LoginScreen has no child widgets after KV build")
+        if "login_input" not in current_screen.ids or "password_input" not in current_screen.ids:
+            raise RuntimeError(
+                f"LoginScreen ids incomplete: ids={list(current_screen.ids.keys())}"
             )
 
     def navigate(self, screen_name, reset=False):
