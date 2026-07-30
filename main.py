@@ -3467,8 +3467,21 @@ class SixnerInventoryApp(App):
         sm.add_widget(TransferCreateScreen(name="transfer_create"))
         sm.add_widget(FormsMenuScreen(name="forms_menu"))
         sm.add_widget(FormViewScreen(name="form_view"))
+        sm.current = "login"
+        self._validate_startup_ui(sm)
         Window.bind(on_keyboard=self._on_keyboard)
         return sm
+
+    def _validate_startup_ui(self, root):
+        if root is None:
+            raise RuntimeError("Root widget was not created")
+        screen_names = list(root.screen_names)
+        if not screen_names:
+            raise RuntimeError("ScreenManager has no screens after startup")
+        if root.current != "login":
+            raise RuntimeError(f"Unexpected startup screen: {root.current}")
+        if not root.children:
+            raise RuntimeError("Root widget has no child widgets after startup")
 
     def navigate(self, screen_name, reset=False):
         if self.root:
