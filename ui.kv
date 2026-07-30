@@ -2137,7 +2137,7 @@
 <EmployeeOrderDetailScreen>:
     AppPageLayout:
         orientation: "vertical"
-        padding: dp(18), dp(22)
+        padding: dp(16), dp(18)
         spacing: dp(10)
         canvas.before:
             Color:
@@ -2147,29 +2147,43 @@
                 size: self.size
 
         BoxLayout:
+            orientation: "vertical"
             size_hint_y: None
-            height: dp(44)
+            height: dp(52) + max(dp(30), employee_order_title.texture_size[1] + dp(8))
+            spacing: dp(2)
 
-            SecondaryButton:
-                text: "Назад"
-                size_hint_x: None
-                width: dp(92)
-                on_release: root.goto_queue()
+            BoxLayout:
+                size_hint_y: None
+                height: dp(52)
+
+                SecondaryButton:
+                    text: "‹"
+                    font_size: "24sp"
+                    size_hint_x: None
+                    width: dp(52)
+                    on_release: root.goto_queue()
+
+                Widget:
+
+                SecondaryButton:
+                    text: "↻"
+                    font_size: "20sp"
+                    size_hint_x: None
+                    width: dp(52)
+                    on_release: root.load_detail()
 
             Label:
-                text: root.title_text
+                id: employee_order_title
+                text: root.title_display
                 color: 0.04, 0.04, 0.04, 1
                 bold: True
-                font_size: "21sp"
+                font_size: "19sp"
                 halign: "center"
                 valign: "middle"
-                text_size: self.size
-
-            SecondaryButton:
-                text: "Обновить"
-                size_hint_x: None
-                width: dp(104)
-                on_release: root.load_detail()
+                max_lines: 2
+                text_size: self.width, None
+                size_hint_y: None
+                height: max(dp(30), self.texture_size[1] + dp(8))
 
         ScrollView:
             bar_width: dp(4)
@@ -2178,89 +2192,138 @@
                 orientation: "vertical"
                 size_hint_y: None
                 height: self.minimum_height
-                spacing: dp(10)
+                spacing: dp(12)
+                padding: 0, 0, 0, dp(70) if root.action_text else dp(8)
 
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(156)
+                    height: self.minimum_height
+                    padding: dp(16)
+                    spacing: dp(8)
 
                     SectionLabel:
-                        text: root.status_text
+                        text: root.status_text if root.status_text else "Вышивка"
+                        font_size: "18sp"
 
                     FinePrint:
                         text: root.test_text
                         color: 0.45, 0.50, 0.30, 1
+                        size_hint_y: None
+                        text_size: self.width, None
+                        height: self.texture_size[1] if root.test_text else 0
+                        opacity: 1 if root.test_text else 0
 
                     FinePrint:
-                        text: root.kit_text
+                        text: root.created_text
                         color: 0.28, 0.28, 0.28, 1
+                        size_hint_y: None
+                        text_size: self.width, None
+                        height: self.texture_size[1]
+
+                    FinePrint:
+                        text: "Комплект: " + root.kit_text
+                        color: 0.28, 0.28, 0.28, 1
+                        size_hint_y: None
+                        text_size: self.width, None
+                        height: self.texture_size[1]
 
                     FinePrint:
                         text: root.action_hint
                         color: 0.70, 0.20, 0.20, 1
-
-                    PrimaryButton:
-                        text: root.action_text
                         size_hint_y: None
-                        height: dp(42)
-                        opacity: 1 if root.action_text else 0
-                        disabled: root.loading or root.action_loading or not root.action_enabled
-                        on_release: root.run_action()
+                        text_size: self.width, None
+                        height: self.texture_size[1] if root.action_hint else 0
+                        opacity: 1 if root.action_hint else 0
 
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(190)
+                    height: self.minimum_height
+                    padding: dp(16)
+                    spacing: dp(10)
 
                     SectionLabel:
                         text: "Параметры"
+                        font_size: "18sp"
 
-                    FinePrint:
-                        text: root.config_text
-                        color: 0.28, 0.28, 0.28, 1
+                    BoxLayout:
+                        id: employee_params_box
+                        orientation: "vertical"
+                        size_hint_y: None
+                        height: self.minimum_height
+                        spacing: dp(4)
 
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(136)
+                    height: self.minimum_height
+                    padding: dp(16)
+                    spacing: dp(8)
 
                     SectionLabel:
                         text: "Фамилии / позывные"
+                        font_size: "18sp"
 
-                    FinePrint:
-                        text: root.lines_text
-                        color: 0.28, 0.28, 0.28, 1
+                    BoxLayout:
+                        id: employee_lines_box
+                        orientation: "vertical"
+                        size_hint_y: None
+                        height: self.minimum_height
+                        spacing: dp(2)
 
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(90)
+                    height: self.minimum_height
+                    padding: dp(16)
+                    spacing: dp(8)
 
                     SectionLabel:
                         text: "Комментарий"
+                        font_size: "18sp"
 
-                    FinePrint:
-                        text: root.comment_text
-                        color: 0.28, 0.28, 0.28, 1
+                    BoxLayout:
+                        id: employee_comment_box
+                        orientation: "vertical"
+                        size_hint_y: None
+                        height: self.minimum_height
 
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(150)
+                    height: self.minimum_height
+                    padding: dp(16)
+                    spacing: dp(8)
 
                     SectionLabel:
                         text: "История"
+                        font_size: "18sp"
 
-                    FinePrint:
-                        text: root.history_text
-                        color: 0.28, 0.28, 0.28, 1
+                    BoxLayout:
+                        id: employee_history_box
+                        orientation: "vertical"
+                        size_hint_y: None
+                        height: self.minimum_height
+                        spacing: dp(6)
 
         FinePrint:
             text: "Загрузка..." if root.loading else root.error_text
             color: 0.34, 0.34, 0.34, 1
             size_hint_y: None
             height: dp(30)
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(56) if root.action_text else 0
+            padding: dp(16), 0
+            opacity: 1 if root.action_text else 0
+
+            PrimaryButton:
+                text: "Загрузка..." if root.action_loading else root.action_text
+                height: dp(54)
+                disabled: root.loading or root.action_loading or not root.action_enabled
+                on_release: root.run_action()
 
 
 <EmployeeAdminUsersScreen>:

@@ -2891,12 +2891,17 @@ class EmployeeOrderDetailScreen(Screen):
     role_code = StringProperty("")
     role_title = StringProperty("")
     title_text = StringProperty("Заказ")
+    title_display = StringProperty("Заказ")
     status_text = StringProperty("")
     kit_text = StringProperty("")
+    created_text = StringProperty("")
     config_text = StringProperty("")
+    parameter_rows = ListProperty([])
     lines_text = StringProperty("")
+    line_rows = ListProperty([])
     comment_text = StringProperty("Комментарий клиента: нет")
     history_text = StringProperty("")
+    history_rows = ListProperty([])
     test_text = StringProperty("")
     action_text = StringProperty("")
     action_hint = StringProperty("")
@@ -2951,15 +2956,26 @@ class EmployeeOrderDetailScreen(Screen):
         history = data.get("history") or []
 
         self.title_text = order.get("order_number") or "Заказ"
-        self.status_text = f"Этап: {workflow.get('current_stage_title') or employee_stage_label(workflow.get('current_stage'))}"
-        self.kit_text = f"Комплект: {kit.get('title') or ''}\nСоздан: {order.get('created_at') or ''}"
+        self.title_display = self._format_order_title(self.title_text)
+        self.status_text = workflow.get("current_stage_title") or employee_stage_label(workflow.get("current_stage"))
+        self.kit_text = kit.get("title") or "Комплект не указан"
+        self.created_text = "Создан: " + (order.get("created_at") or "не указано")
+        self.parameter_rows = self._build_parameter_rows(options)
         self.config_text = "\n".join(
             f"{option.get('group_title')}: {option.get('title')}" for option in options
         ) or "Параметры не найдены"
+        self.line_rows = [
+            {
+                "text_value": line.get("text_value") or "Без текста",
+                "quantity_text": f"× {line.get('quantity') or 1}",
+            }
+            for line in lines
+        ] or [{"text_value": "Строки не найдены", "quantity_text": ""}]
         self.lines_text = "\n".join(
             f"{line.get('text_value')} × {line.get('quantity')}" for line in lines
         ) or "Строки не найдены"
-        self.comment_text = "Комментарий клиента: " + (order.get("client_comment") or "нет")
+        self.comment_text = order.get("client_comment") or "Комментарий отсутствует"
+        self.history_rows = self._build_history_rows(history)
         self.history_text = "\n".join(
             " · ".join(
                 part for part in [
@@ -2972,7 +2988,7 @@ class EmployeeOrderDetailScreen(Screen):
             )
             for item in history
         ) or "История пуста"
-        self.test_text = "Тестовый заказ" if order.get("is_test") else "Production"
+        self.test_text = "Тестовый заказ" if order.get("is_test") else ""
         if workflow.get("can_claim"):
             self.action_mode = "claim"
             self.action_text = "Взять в работу"
@@ -2994,6 +3010,193 @@ class EmployeeOrderDetailScreen(Screen):
             self.action_hint = ""
             self.action_enabled = False
         self.error_text = ""
+        Clock.schedule_once(lambda dt: self._populate_detail_cards(), 0)
+
+    def _format_order_title(self, value):
+        title = str(value or "Заказ")
+        if len(title) <= 20 or "-" not in title:
+            return title
+        parts = title.split("-")
+        if len(parts) <= 2:
+            return title
+        best_index = 1
+        best_score = None
+        for index in range(1, len(parts)):
+            left = "-".join(parts[:index]) + "-"
+            right = "-".join(parts[index:])
+            score = abs(len(left) - len(right))
+            if best_score is None or score < best_score:
+                best_score = score
+                best_index = index
+        return "-".join(parts[:best_index]) + "-\n" + "-".join(parts[best_index:])
+
+    def _build_parameter_rows(self, options):
+        grouped = []
+        seen = {}
+        for option in options:
+            label = option.get("group_title") or "Параметр"
+            value = option.get("title") or option.get("code") or ""
+            if not value:
+                continue
+            if label not in seen:
+                seen[label] = []
+                grouped.append((label, seen[label]))
+            seen[label].append(value)
+        rows = [
+            {"label_text": label, "value_text": ", ".join(values)}
+            for label, values in grouped
+        ]
+        return rows or [{"label_text": "Параметры", "value_text": "Не найдены"}]
+
+    def _build_history_rows(self, history):
+        labels = {
+            "CREATED": "Заказ создан",
+            "CLAIM": "Взят в работу",
+            "CLAIMED": "Взят в работу",
+            "COMPLETE": "Этап завершён",
+            "COMPLETED": "Этап завершён",
+            "TRANSFER": "Передан дальше",
+            "NEXT": "Передан дальше",
+        }
+        rows = []
+        for item in history:
+            action = item.get("action") or ""
+            rows.append({
+                "time_text": item.get("created_at") or "",
+                "action_text": labels.get(action, action.title() if action else "Событие"),
+                "stage_text": item.get("stage_title") or "",
+                "comment_text": item.get("comment") or "",
+            })
+        return rows or [{
+            "time_text": "",
+            "action_text": "История пуста",
+            "stage_text": "",
+            "comment_text": "",
+        }]
+
+    def _make_detail_label(self, text, font_size=14, color=(0.06, 0.06, 0.06, 1), bold=False):
+        label = Label(
+            text=str(text or ""),
+            size_hint_y=None,
+            halign="left",
+            valign="top",
+            color=color,
+            bold=bold,
+            font_size=sp(font_size),
+            markup=False,
+        )
+        label.bind(
+            width=lambda inst, value: setattr(inst, "text_size", (max(value, dp(1)), None)),
+            texture_size=lambda inst, size: setattr(inst, "height", size[1]),
+        )
+        return label
+
+    def _make_divider(self):
+        line = BoxLayout(size_hint_y=None, height=dp(1))
+        with line.canvas.before:
+            Color(0.90, 0.90, 0.90, 1)
+            rect = RoundedRectangle(pos=line.pos, size=line.size, radius=[dp(0)])
+        line.bind(pos=lambda inst, value: setattr(rect, "pos", value))
+        line.bind(size=lambda inst, value: setattr(rect, "size", value))
+        return line
+
+    def _make_param_row(self, label_text, value_text):
+        row = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            spacing=dp(10),
+            padding=(0, dp(3), 0, dp(3)),
+        )
+        label = self._make_detail_label(label_text, 13, (0.42, 0.42, 0.42, 1))
+        label.size_hint_x = 0.42
+        value = self._make_detail_label(value_text, 14, (0.06, 0.06, 0.06, 1))
+        value.size_hint_x = 0.58
+
+        def update_height(*_):
+            row.height = max(label.height, value.height) + dp(6)
+
+        label.bind(height=update_height)
+        value.bind(height=update_height)
+        row.add_widget(label)
+        row.add_widget(value)
+        return row
+
+    def _make_line_row(self, text_value, quantity_text):
+        row = BoxLayout(orientation="horizontal", size_hint_y=None, spacing=dp(8), padding=(0, dp(4), 0, dp(4)))
+        name = self._make_detail_label(text_value, 15, (0.06, 0.06, 0.06, 1))
+        qty = self._make_detail_label(quantity_text, 14, (0.32, 0.32, 0.32, 1), bold=True)
+        qty.size_hint_x = None
+        qty.width = dp(54)
+
+        def update_height(*_):
+            row.height = max(name.height, qty.height) + dp(8)
+
+        name.bind(height=update_height)
+        qty.bind(height=update_height)
+        row.add_widget(name)
+        row.add_widget(qty)
+        return row
+
+    def _make_history_row(self, row_data):
+        item = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(4), padding=(0, dp(5), 0, dp(5)))
+        time_label = self._make_detail_label(row_data.get("time_text"), 12, (0.48, 0.48, 0.48, 1))
+        action_label = self._make_detail_label(row_data.get("action_text"), 15, (0.06, 0.06, 0.06, 1), bold=True)
+        stage_text = row_data.get("stage_text") or ""
+        stage_label = self._make_detail_label(stage_text, 13, (0.34, 0.34, 0.34, 1)) if stage_text else None
+        comment_text = row_data.get("comment_text") or ""
+        comment_label = self._make_detail_label(comment_text, 13, (0.26, 0.26, 0.26, 1)) if comment_text else None
+
+        def update_height(*_):
+            children_height = sum(child.height for child in item.children)
+            item.height = children_height + item.spacing * max(len(item.children) - 1, 0) + dp(10)
+
+        for child in (time_label, action_label, stage_label, comment_label):
+            if child is None:
+                continue
+            child.bind(height=update_height)
+            item.add_widget(child)
+        Clock.schedule_once(lambda dt: update_height(), 0)
+        return item
+
+    def _short_comment(self):
+        comment = (self.comment_text or "").strip() or "Комментарий отсутствует"
+        if comment == "Комментарий отсутствует":
+            return comment
+        lines = comment.splitlines()
+        if len(lines) > 5:
+            return "\n".join(lines[:5]) + "\nПоказать полностью"
+        if len(comment) > 520:
+            return comment[:520].rstrip() + "...\nПоказать полностью"
+        return comment
+
+    def _populate_detail_cards(self):
+        ids = getattr(self, "ids", {})
+        for container_name in ("employee_params_box", "employee_lines_box", "employee_history_box", "employee_comment_box"):
+            if container_name in ids:
+                ids[container_name].clear_widgets()
+
+        params = ids.get("employee_params_box")
+        if params:
+            for row in self.parameter_rows:
+                params.add_widget(self._make_param_row(row.get("label_text"), row.get("value_text")))
+
+        lines = ids.get("employee_lines_box")
+        if lines:
+            for index, row in enumerate(self.line_rows):
+                if index:
+                    lines.add_widget(self._make_divider())
+                lines.add_widget(self._make_line_row(row.get("text_value"), row.get("quantity_text")))
+
+        comment = ids.get("employee_comment_box")
+        if comment:
+            comment.add_widget(self._make_detail_label(self._short_comment(), 14, (0.28, 0.28, 0.28, 1)))
+
+        history = ids.get("employee_history_box")
+        if history:
+            for index, row in enumerate(self.history_rows):
+                if index:
+                    history.add_widget(self._make_divider())
+                history.add_widget(self._make_history_row(row))
 
     def run_action(self):
         if self.action_loading or not self.action_enabled:
