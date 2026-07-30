@@ -477,7 +477,7 @@ def build_inventory_from_docs(docs):
     return list(agg.values())
 
 
-# ---------- ЭКРАН ВХОДА ----------
+# ---------- ЭКРАН АВТОРИЗАЦИИ ----------
 
 
 class LoginScreen(Screen):
@@ -1352,11 +1352,18 @@ class VoentorgScreen(Screen):
                 return
 
             def ui_ok(dt, sections=sections):
+                icons = {
+                    "orders": "З",
+                    "form": "Ф",
+                    "uniform": "Ф",
+                    "equipment": "С",
+                    "chevrons": "Ш",
+                }
                 self.ids.voentorg_list.data = [
                     {
                         "title": section.get("title") or "",
                         "subtitle": section.get("subtitle") or "",
-                        "icon_text": section.get("icon") or "",
+                        "icon_text": icons.get(section.get("code") or "", "В"),
                         "action": section.get("code") or "",
                         "payload": section,
                     }
@@ -1788,7 +1795,7 @@ class ChevronOrderScreen(Screen):
                     {
                         "title": kit.get("title") or "",
                         "subtitle": kit.get("subtitle") or "",
-                        "icon_text": kit.get("icon") or "",
+                        "icon_text": "Ш",
                         "action": "kit",
                         "payload": kit,
                     }
@@ -3337,11 +3344,19 @@ class EmployeePanelScreen(Screen):
             def ui_ok(dt, data=data):
                 self.loading = False
                 sections = data.get("sections") or []
+                role_icons = {
+                    "EMBROIDERY": "В",
+                    "CUTTING_PACKING": "К",
+                    "DELIVERY": "Д",
+                    "embroiderer": "В",
+                    "cutter": "К",
+                    "courier": "Д",
+                }
                 rows = [
                     {
                         "title": section.get("title") or "",
                         "subtitle": employee_stage_label(section.get("stage")),
-                        "icon_text": str(index).zfill(2),
+                        "icon_text": role_icons.get(section.get("stage") or section.get("code") or "", str(index).zfill(2)),
                         "action": "employee_role",
                         "payload": section,
                     }
@@ -3446,8 +3461,12 @@ class SixnerInventoryApp(App):
         self._allow_close_events_at = float("inf")
 
     def build(self):
-        self.title = "Учёт имущества"
+        self.title = "ВОСК"
         Window.clearcolor = (0.965, 0.965, 0.95, 1)
+        if platform.system() == "Windows":
+            Window.size = (430, 850)
+            Window.minimum_width = 360
+            Window.minimum_height = 700
         Builder.load_file("ui.kv")
         sm = RootWidget(transition=FadeTransition())
         sm.add_widget(LoginScreen(name="login"))

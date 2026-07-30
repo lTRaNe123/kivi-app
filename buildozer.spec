@@ -1,5 +1,5 @@
 [app]
-title = Strig
+title = ВОСК
 package.name = strigmobile
 package.domain = org.vangelagency
 source.dir = .

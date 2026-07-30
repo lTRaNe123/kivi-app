@@ -19,7 +19,7 @@
     size_hint_y: 1
     opacity: 1
     disabled: False
-    width: max(dp(1), min((self.parent.width - dp(32)) if self.parent and self.parent.width > dp(32) else dp(360), dp(1180)))
+    width: max(dp(1), min((self.parent.width - dp(32)) if self.parent and self.parent.width > dp(32) else dp(430), dp(460)))
     pos_hint: {"center_x": 0.5}
 
 
@@ -117,7 +117,7 @@
             size: self.size
             radius: [dp(8)]
         Color:
-            rgba: (0.45, 0.50, 0.30, 1) if self.focus else (0.82, 0.82, 0.82, 1)
+            rgba: (0.10, 0.22, 0.42, 1) if self.focus else (0.82, 0.82, 0.82, 1)
         Line:
             rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
             width: 1.25 if self.focus else 1
@@ -134,7 +134,7 @@
     height: dp(52)
     canvas.before:
         Color:
-            rgba: (0.45, 0.50, 0.30, 1) if self.state == "normal" else (0.36, 0.40, 0.24, 1)
+            rgba: (0.10, 0.22, 0.42, 1) if self.state == "normal" else (0.07, 0.15, 0.30, 1)
         RoundedRectangle:
             pos: self.pos
             size: self.size
@@ -170,24 +170,24 @@
     background_color: 0, 0, 0, 0
     color: 0.05, 0.05, 0.05, 1
     bold: True
-    font_size: "17sp"
+    font_size: "15sp"
     halign: "left"
     valign: "middle"
     text_size: self.width - dp(32), self.height
     padding: dp(16), 0
     size_hint_y: None
-    height: dp(64)
+    height: dp(56)
     canvas.before:
         Color:
             rgba: 1, 1, 1, 1
         RoundedRectangle:
             pos: self.pos
             size: self.size
-            radius: [dp(7)]
+            radius: [dp(6)]
         Color:
             rgba: 0.86, 0.86, 0.86, 1
         Line:
-            rounded_rectangle: self.x, self.y, self.width, self.height, dp(7)
+            rounded_rectangle: self.x, self.y, self.width, self.height, dp(6)
             width: 1
 
 
@@ -721,15 +721,15 @@
             size_hint: None, None
             opacity: 1
             disabled: False
-            width: max(dp(1), min((root.width - dp(56)) if root.width > dp(56) else dp(280), dp(320)))
+            width: max(dp(1), min((root.width - dp(48)) if root.width > dp(48) else dp(340), dp(340)))
             height: dp(266)
-            pos_hint: {"center_x": 0.5, "center_y": 0.52}
+            pos_hint: {"center_x": 0.5, "center_y": 0.44}
 
             Label:
-                text: "ВХОД"
+                text: "ВОСК"
                 color: 0.02, 0.02, 0.02, 1
                 bold: True
-                font_size: "42sp"
+                font_size: "34sp"
                 halign: "center"
                 valign: "middle"
                 text_size: self.size
@@ -751,8 +751,16 @@
                 write_tab: False
                 on_text_validate: root.submit_password_field()
 
-            PrimaryButton:
+            Button:
                 text: "Входим..." if root.login_loading else "Войти"
+                background_normal: ""
+                background_down: ""
+                background_color: (0.02, 0.02, 0.02, 1) if self.state == "normal" else (0.12, 0.12, 0.12, 1)
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "15sp"
+                size_hint_y: None
+                height: dp(50)
                 disabled: root.login_loading
                 on_release: root.do_login()
 
@@ -809,27 +817,27 @@
             height: dp(42)
 
         MenuCard:
-            text: "1.   Личный кабинет"
+            text: "01   Личный кабинет    >"
             on_release: root.goto_finance()
 
         MenuCard:
             id: btn_voentorg
-            text: "2.   Военторг"
-            height: 0 if self.disabled else dp(64)
+            text: "02   Военторг    >"
+            height: 0 if self.disabled else dp(56)
             opacity: 0 if self.disabled else 1
             on_release: root.goto_voentorg()
 
         MenuCard:
             id: btn_employee
-            text: "3.   Панель сотрудника"
-            height: 0 if self.disabled else dp(64)
+            text: "03   Панель сотрудника    >"
+            height: 0 if self.disabled else dp(56)
             opacity: 0 if self.disabled else 1
             on_release: root.goto_employee_panel()
 
         Widget:
 
         FinePrint:
-            text: "ⓘ  Состав разделов зависит от роли, подразделения и уровня доступа пользователя"
+            text: "Состав разделов зависит от роли и уровня доступа пользователя"
             size_hint_y: None
             height: dp(42)
 
@@ -1403,8 +1411,8 @@
                 text: "Комплекты"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.45, 0.50, 0.30, 1) if root.active_tab == "kits" else (1, 1, 1, 1)
-                color: (1, 1, 1, 1) if root.active_tab == "kits" else (0.05, 0.05, 0.05, 1)
+                background_color: (0.90, 0.93, 0.82, 1) if root.active_tab == "kits" else (1, 1, 1, 1)
+                color: 0.05, 0.05, 0.05, 1
                 bold: True
                 font_size: "13sp"
                 on_release: root.select_tab("kits")
@@ -1413,18 +1421,18 @@
                 text: "Штучные"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.45, 0.50, 0.30, 1) if root.active_tab == "single" else (1, 1, 1, 1)
-                color: (1, 1, 1, 1) if root.active_tab == "single" else (0.05, 0.05, 0.05, 1)
+                background_color: (0.90, 0.93, 0.82, 1) if root.active_tab == "single" else (1, 1, 1, 1)
+                color: 0.05, 0.05, 0.05, 1
                 bold: True
                 font_size: "13sp"
                 on_release: root.select_tab("single")
 
             Button:
-                text: "По фото"
+                text: "На заказ по фото"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.45, 0.50, 0.30, 1) if root.active_tab == "photo" else (1, 1, 1, 1)
-                color: (1, 1, 1, 1) if root.active_tab == "photo" else (0.05, 0.05, 0.05, 1)
+                background_color: (0.90, 0.93, 0.82, 1) if root.active_tab == "photo" else (1, 1, 1, 1)
+                color: 0.05, 0.05, 0.05, 1
                 bold: True
                 font_size: "13sp"
                 on_release: root.select_tab("photo")
@@ -1529,7 +1537,7 @@
         spacing: dp(10)
         canvas.before:
             Color:
-                rgba: 0.965, 0.965, 0.95, 1
+                rgba: 0.08, 0.10, 0.12, 1
             Rectangle:
                 pos: self.pos
                 size: self.size
@@ -1543,8 +1551,8 @@
                 text: "Назад"
                 background_normal: ""
                 background_down: ""
-                background_color: 0.88, 0.88, 0.84, 1
-                color: 0.05, 0.05, 0.05, 1
+                background_color: 0.16, 0.19, 0.23, 1
+                color: 1, 1, 1, 1
                 bold: True
                 font_size: "13sp"
                 size_hint_x: None
@@ -1553,7 +1561,7 @@
 
             Label:
                 text: root.kit_title
-                color: 0.05, 0.05, 0.05, 1
+                color: 1, 1, 1, 1
                 bold: True
                 font_size: "20sp"
                 halign: "center"
@@ -1564,8 +1572,8 @@
                 text: "Повторить"
                 background_normal: ""
                 background_down: ""
-                background_color: 0.88, 0.88, 0.84, 1
-                color: 0.05, 0.05, 0.05, 1
+                background_color: 0.16, 0.19, 0.23, 1
+                color: 1, 1, 1, 1
                 bold: True
                 font_size: "13sp"
                 size_hint_x: None
@@ -1574,7 +1582,7 @@
 
         Label:
             text: "Загрузка..." if root.loading else root.price_text
-            color: 0.28, 0.28, 0.28, 1
+            color: 0.78, 0.83, 0.90, 1
             bold: True
             font_size: "14sp"
             halign: "center"
@@ -1585,7 +1593,7 @@
 
         Label:
             text: "Состав комплекта"
-            color: 0.05, 0.05, 0.05, 1
+            color: 1, 1, 1, 1
             bold: True
             font_size: "16sp"
             halign: "left"
@@ -1611,7 +1619,7 @@
 
         Label:
             text: "Настройки"
-            color: 0.05, 0.05, 0.05, 1
+            color: 1, 1, 1, 1
             bold: True
             font_size: "16sp"
             halign: "left"
@@ -1654,8 +1662,8 @@
                 text: "Выбрать другой дизайн"
                 background_normal: ""
                 background_down: ""
-                background_color: 0.88, 0.88, 0.84, 1
-                color: 0.05, 0.05, 0.05, 1
+                background_color: 0.16, 0.19, 0.23, 1
+                color: 1, 1, 1, 1
                 bold: True
                 font_size: "13sp"
                 on_release: root.confirm_choose_other()
@@ -1678,7 +1686,7 @@
         spacing: dp(10)
         canvas.before:
             Color:
-                rgba: 0.965, 0.965, 0.95, 1
+                rgba: 0.08, 0.10, 0.12, 1
             Rectangle:
                 pos: self.pos
                 size: self.size
@@ -1692,8 +1700,8 @@
                 text: "Назад"
                 background_normal: ""
                 background_down: ""
-                background_color: 0.88, 0.88, 0.84, 1
-                color: 0.05, 0.05, 0.05, 1
+                background_color: 0.16, 0.19, 0.23, 1
+                color: 1, 1, 1, 1
                 bold: True
                 font_size: "13sp"
                 size_hint_x: None
@@ -1702,7 +1710,7 @@
 
             Label:
                 text: root.kit_title
-                color: 0.05, 0.05, 0.05, 1
+                color: 1, 1, 1, 1
                 bold: True
                 font_size: "20sp"
                 halign: "center"
@@ -1711,7 +1719,7 @@
 
         Label:
             text: "Фамилии / Позывные"
-            color: 0.05, 0.05, 0.05, 1
+            color: 1, 1, 1, 1
             bold: True
             font_size: "22sp"
             halign: "left"
@@ -1722,7 +1730,7 @@
 
         Label:
             text: root.summary_text
-            color: 0.28, 0.28, 0.28, 1
+            color: 0.78, 0.83, 0.90, 1
             font_size: "13sp"
             halign: "left"
             valign: "top"
@@ -1799,7 +1807,7 @@
         spacing: dp(10)
         canvas.before:
             Color:
-                rgba: 0.965, 0.965, 0.95, 1
+                rgba: 0.08, 0.10, 0.12, 1
             Rectangle:
                 pos: self.pos
                 size: self.size
@@ -1808,8 +1816,8 @@
             text: "Назад"
             background_normal: ""
             background_down: ""
-            background_color: 0.88, 0.88, 0.84, 1
-            color: 0.05, 0.05, 0.05, 1
+            background_color: 0.16, 0.19, 0.23, 1
+            color: 1, 1, 1, 1
             bold: True
             size_hint: None, None
             width: dp(82)
@@ -1818,7 +1826,7 @@
 
         Label:
             text: root.title_text
-            color: 0.05, 0.05, 0.05, 1
+            color: 1, 1, 1, 1
             bold: True
             font_size: "21sp"
             halign: "left"
@@ -1829,7 +1837,7 @@
 
         Label:
             text: root.summary_text
-            color: 0.28, 0.28, 0.28, 1
+            color: 0.78, 0.83, 0.90, 1
             font_size: "13sp"
             halign: "left"
             valign: "top"
@@ -1839,7 +1847,7 @@
 
         Label:
             text: "Фамилии / позывные"
-            color: 0.05, 0.05, 0.05, 1
+            color: 1, 1, 1, 1
             bold: True
             font_size: "16sp"
             halign: "left"
@@ -1850,7 +1858,7 @@
 
         Label:
             text: root.lines_text
-            color: 0.28, 0.28, 0.28, 1
+            color: 0.82, 0.86, 0.92, 1
             font_size: "14sp"
             halign: "left"
             valign: "top"
@@ -2069,7 +2077,7 @@
                 text: "Новые"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.45, 0.50, 0.30, 1) if root.queue_mode == "new" else (0.88, 0.88, 0.84, 1)
+                background_color: (0.10, 0.22, 0.42, 1) if root.queue_mode == "new" else (0.88, 0.90, 0.94, 1)
                 color: (1, 1, 1, 1) if root.queue_mode == "new" else (0.06, 0.06, 0.06, 1)
                 bold: True
                 font_size: "13sp"
@@ -2079,7 +2087,7 @@
                 text: "Мои"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.45, 0.50, 0.30, 1) if root.queue_mode == "mine" else (0.88, 0.88, 0.84, 1)
+                background_color: (0.10, 0.22, 0.42, 1) if root.queue_mode == "mine" else (0.88, 0.90, 0.94, 1)
                 color: (1, 1, 1, 1) if root.queue_mode == "mine" else (0.06, 0.06, 0.06, 1)
                 bold: True
                 font_size: "13sp"
@@ -2089,7 +2097,7 @@
                 text: "Завершил"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.45, 0.50, 0.30, 1) if root.queue_mode == "completed" else (0.88, 0.88, 0.84, 1)
+                background_color: (0.10, 0.22, 0.42, 1) if root.queue_mode == "completed" else (0.88, 0.90, 0.94, 1)
                 color: (1, 1, 1, 1) if root.queue_mode == "completed" else (0.06, 0.06, 0.06, 1)
                 bold: True
                 font_size: "13sp"
