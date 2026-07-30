@@ -17,6 +17,7 @@ if platform.system() == "Windows":
 
 from kivy.app import App
 from kivy.clock import Clock
+from kivy.logger import Logger
 
 Clock.max_iteration = 1000
 
@@ -3441,6 +3442,7 @@ class SixnerInventoryApp(App):
         self.current_user = None
         self._last_exit_prompt = 0
         self._last_back_key_at = 0
+        self._allow_close_events_at = float("inf")
 
     def build(self):
         self.title = "Учёт имущества"
@@ -3470,7 +3472,13 @@ class SixnerInventoryApp(App):
         sm.current = "login"
         self._validate_startup_ui(sm)
         Window.bind(on_keyboard=self._on_keyboard)
+        Window.bind(on_request_close=self._on_request_close)
         return sm
+
+    def on_start(self):
+        self._last_exit_prompt = 0
+        self._last_back_key_at = 0
+        self._allow_close_events_at = time.monotonic() + 0.5
 
     def _validate_startup_ui(self, root):
         if root is None:
@@ -3494,7 +3502,7 @@ class SixnerInventoryApp(App):
             self.root.navigate(screen_name, reset=reset)
 
     def back(self):
-        return self.handle_back()
+        return self.handle_back(source="navigation_back")
 
     def logout(self):
         self.current_user = None
@@ -3503,7 +3511,7 @@ class SixnerInventoryApp(App):
         if self.root:
             self.root.navigate("login", reset=True)
 
-    def handle_back(self):
+    def handle_back(self, source="navigation_back"):
         self._dismiss_stale_modals()
         if OPEN_MODALS:
             OPEN_MODALS[-1].dismiss()
@@ -3517,6 +3525,7 @@ class SixnerInventoryApp(App):
         if screen in ("login", "user_home"):
             now = time.monotonic()
             if now - self._last_exit_prompt <= 2:
+                self._log_exit_allowed(source)
                 return False
             self._last_exit_prompt = now
             current_screen = self.root.current_screen if self.root else None
@@ -3534,11 +3543,35 @@ class SixnerInventoryApp(App):
     def _on_keyboard(self, window, key, scancode, codepoint, modifier):
         if key not in (27, 1001):
             return False
+        if time.monotonic() < self._allow_close_events_at:
+            Logger.info(
+                f"SixnerInventoryApp: ignored startup back key={key} "
+                f"screen={self.root.current if self.root else None}"
+            )
+            return True
         now = time.monotonic()
         if now - self._last_back_key_at < 0.15:
             return True
         self._last_back_key_at = now
-        return self.handle_back()
+        return self.handle_back(source=f"keyboard:{key}")
+
+    def _on_request_close(self, *args):
+        if time.monotonic() < self._allow_close_events_at:
+            Logger.info(
+                f"SixnerInventoryApp: ignored startup close request "
+                f"screen={self.root.current if self.root else None}"
+            )
+            return True
+        return self.handle_back(source="window_close")
+
+    def _log_exit_allowed(self, source):
+        screen = self.root.current if self.root else None
+        history_size = len(self.root.history) if self.root and hasattr(self.root, "history") else 0
+        Logger.info(
+            f"SixnerInventoryApp: allowing exit source={source} "
+            f"screen={screen} history={history_size} "
+            f"last_exit_prompt={self._last_exit_prompt:.3f}"
+        )
 
     def _dismiss_stale_modals(self):
         OPEN_MODALS[:] = [modal for modal in OPEN_MODALS if modal.parent is not None]
