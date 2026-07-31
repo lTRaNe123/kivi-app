@@ -20,3 +20,10 @@
 
 Перед публикацией APK нужно проверить, что он подписан тем же сертификатом, что и уже установленная постоянная версия приложения.
 
+Ручное создание первого ключа выполняется вне Git:
+
+```bash
+/home/openclaw/.openclaw/secrets/vosk-release/create_keystore.sh
+```
+
+Release-сборка читает секреты из `/home/openclaw/.openclaw/secrets/vosk-release/signing.env` или из пути `VOSK_SIGNING_ENV`. Скрипт сборки проверяет JDK 17, `version = 0.1.0`, `android.numeric_version = 1`, фактический package name `org.vangelagency.strigmobile`, подпись APK и SHA256.
