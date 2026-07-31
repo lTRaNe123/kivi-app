@@ -5,6 +5,8 @@ SIGNING_ENV="${VOSK_SIGNING_ENV:-/home/openclaw/.openclaw/secrets/vosk-release/s
 EXPECTED_VERSION_NAME="0.1.0"
 EXPECTED_VERSION_CODE="1"
 EXPECTED_PACKAGE_NAME="org.vangelagency.strigmobile"
+EXPECTED_APK_NAME="vosk-0.1.0-code1-arm64-release.apk"
+RELEASE_OUTPUT_DIR="${VOSK_RELEASE_OUTPUT_DIR:-/home/openclaw/.openclaw/projects/vangel-agency/releases/android}"
 
 if [[ -f "${SIGNING_ENV}" ]]; then
   set +x
@@ -71,11 +73,63 @@ export P4A_RELEASE_KEYSTORE_PASSWD="${VOSK_KEYSTORE_PASSWORD}"
 export P4A_RELEASE_KEYALIAS="${VOSK_KEY_ALIAS}"
 export P4A_RELEASE_KEYALIAS_PASSWD="${VOSK_KEY_PASSWORD}"
 
-buildozer android release
+build_log="$(mktemp /tmp/vosk-buildozer-release.XXXXXX.log)"
+chmod 600 "${build_log}"
+if ! buildozer android release >"${build_log}" 2>&1; then
+  echo "Buildozer release build failed. Sanitized tail:" >&2
+  awk '
+    /^\[INFO\]:    ENV:/ {skip=1; next}
+    /^\[INFO\]:    COMMAND:/ {skip=0}
+    /^E ENVIRONMENT:/ {skip=1; next}
+    /^E Buildozer failed/ {skip=0}
+    skip == 1 {next}
+    /OPENCLAW_.*KEY/ {next}
+    /OPENCLAW_.*TOKEN/ {next}
+    /OPENROUTER_API_KEY/ {next}
+    /P4A_RELEASE_KEY/ {next}
+    /VOSK_KEY/ {next}
+    /PASSWORD/ {next}
+    /PASSWD/ {next}
+    {print}
+  ' "${build_log}" | tail -80 >&2
+  rm -f "${build_log}"
+  exit 2
+fi
+rm -f "${build_log}"
+echo "Buildozer release build completed."
 
-apk_path="$(find bin -maxdepth 1 -type f -name '*.apk' -printf '%T@ %p\n' | sort -nr | awk 'NR==1 {print $2}')"
+dist_dir=".buildozer/android/platform/build-arm64-v8a/dists/strigmobile"
+manifest_path="${dist_dir}/src/main/AndroidManifest.xml"
+provider_xml="android_manifest/provider.xml"
+
+python3 - <<PY
+from pathlib import Path
+
+manifest = Path("${manifest_path}")
+provider = Path("${provider_xml}").read_text(encoding="utf-8").strip()
+text = manifest.read_text(encoding="utf-8")
+if "org.vangelagency.strigmobile.fileprovider" not in text:
+    marker = "    </application>"
+    if marker not in text:
+        raise SystemExit("AndroidManifest.xml does not contain closing application tag")
+    text = text.replace(marker, provider + "\\n" + marker, 1)
+    manifest.write_text(text, encoding="utf-8")
+PY
+
+gradle_log="$(mktemp /tmp/vosk-gradle-release.XXXXXX.log)"
+chmod 600 "${gradle_log}"
+if ! (cd "${dist_dir}" && ./gradlew assembleRelease >"${gradle_log}" 2>&1); then
+  echo "Gradle assembleRelease failed. Tail:" >&2
+  tail -80 "${gradle_log}" >&2
+  rm -f "${gradle_log}"
+  exit 2
+fi
+rm -f "${gradle_log}"
+echo "Gradle assembleRelease completed."
+
+apk_path="$(find "${dist_dir}/build/outputs/apk/release" -maxdepth 1 -type f -name '*.apk' -printf '%T@ %p\n' | sort -nr | awk 'NR==1 {print $2}')"
 if [[ -z "${apk_path}" || ! -f "${apk_path}" ]]; then
-  echo "Release APK was not found in bin/" >&2
+  echo "Release APK was not found in Gradle outputs" >&2
   exit 2
 fi
 
@@ -104,6 +158,12 @@ else
 fi
 
 sha256sum "${apk_path}"
+
+mkdir -p "${RELEASE_OUTPUT_DIR}"
+cp -f "${apk_path}" "${RELEASE_OUTPUT_DIR}/${EXPECTED_APK_NAME}.tmp"
+mv -f "${RELEASE_OUTPUT_DIR}/${EXPECTED_APK_NAME}.tmp" "${RELEASE_OUTPUT_DIR}/${EXPECTED_APK_NAME}"
+chmod 644 "${RELEASE_OUTPUT_DIR}/${EXPECTED_APK_NAME}"
+echo "Release APK copied to ${RELEASE_OUTPUT_DIR}/${EXPECTED_APK_NAME}"
 
 unset P4A_RELEASE_KEYSTORE P4A_RELEASE_KEYSTORE_PASSWD P4A_RELEASE_KEYALIAS P4A_RELEASE_KEYALIAS_PASSWD
 unset VOSK_KEYSTORE_PATH VOSK_KEYSTORE_PASSWORD VOSK_KEY_ALIAS VOSK_KEY_PASSWORD

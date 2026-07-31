@@ -18,7 +18,6 @@ android.numeric_version = 1
 android.enable_androidx = True
 android.gradle_dependencies = androidx.core:core:1.12.0
 android.add_resources = android_resources
-android.extra_manifest_application_arguments = android_manifest/provider.xml
 
 [buildozer]
 log_level = 2
