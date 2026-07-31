@@ -50,6 +50,7 @@ from kivy.utils import platform as kivy_platform
 
 from api_client import api_client, ApiError
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME, PACKAGE_NAME, UPDATE_CHANNEL
+from mobile_update_downloader import DownloadCancelled, stream_apk_to_file
 
 
 MAX_APK_SIZE = 200 * 1024 * 1024
@@ -3651,6 +3652,14 @@ class MobileUpdateScreen(Screen):
         self._check_in_progress = False
         self._download_in_progress = False
         self._cancel_download = False
+        self._progress_lock = threading.Lock()
+        self._progress_downloaded = 0
+        self._progress_total = 0
+        self._progress_percent = 0
+        self._progress_ui_updates = 0
+        self._last_logged_mb = -1
+        self._logged_first_mb = False
+        self._progress_trigger = Clock.create_trigger(self._flush_download_progress, 0.2)
 
     def on_pre_enter(self, *args):
         self.current_version_text = (
@@ -3662,6 +3671,10 @@ class MobileUpdateScreen(Screen):
             if kivy_platform != "android"
             else "После проверки APK откроется системный установщик Android"
         )
+
+    def on_leave(self, *args):
+        if self._download_in_progress:
+            self.cancel_download()
 
     def check_update(self, silent=False):
         if self._check_in_progress:
@@ -3767,20 +3780,26 @@ class MobileUpdateScreen(Screen):
         self.state_text = "Загружаем 0%"
         self.progress_text = "0%"
         self.status_text = ""
+        self._reset_download_progress_state()
+        self._log_download_memory("before-download", 0, 0)
 
         def worker():
             try:
                 path = self._download_apk(self.update_info)
                 self._verify_downloaded_apk(path, self.update_info)
             except Exception as exc:
+                self._log_download_memory("download-error", self._progress_downloaded, self._progress_percent)
                 Clock.schedule_once(lambda dt, exc=exc: self._download_failed(exc))
                 return
+            self._log_download_memory("download-complete", self._progress_downloaded, self._progress_percent)
             Clock.schedule_once(lambda dt, path=path: self._download_finished(path))
 
         threading.Thread(target=worker, daemon=True).start()
 
     def cancel_download(self):
         self._cancel_download = True
+        if self._progress_trigger is not None:
+            self._progress_trigger.cancel()
 
     def _download_apk(self, info):
         import requests
@@ -3800,40 +3819,24 @@ class MobileUpdateScreen(Screen):
         os.makedirs(target_dir, exist_ok=True)
         version_code = int(info.get("version_code") or 0)
         final_path = os.path.join(target_dir, f"vosk-update-{version_code}.apk")
-        part_path = final_path + ".part"
-        if os.path.exists(part_path):
-            os.remove(part_path)
-
-        total = 0
-        sha = hashlib.sha256()
-        with requests.get(url, stream=True, timeout=(8, 30), allow_redirects=True) as resp:
-            resp.raise_for_status()
-            final_host = urlparse(resp.url).hostname
-            if final_host not in ALLOWED_UPDATE_HOSTS:
-                raise ApiError("Редирект APK ведёт на неразрешённый хост")
-            content_length = int(resp.headers.get("Content-Length") or expected_size or 0)
-            if content_length > MAX_APK_SIZE:
-                raise ApiError("APK больше допустимого лимита 200 MB")
-            with open(part_path, "wb") as fh:
-                for chunk in resp.iter_content(chunk_size=1024 * 128):
-                    if self._cancel_download:
-                        raise ApiError("Загрузка отменена")
-                    if not chunk:
-                        continue
-                    total += len(chunk)
-                    if total > MAX_APK_SIZE:
-                        raise ApiError("APK больше допустимого лимита 200 MB")
-                    sha.update(chunk)
-                    fh.write(chunk)
-                    self._update_progress(total, content_length)
-
-        if expected_size and total != expected_size:
-            raise ApiError("Размер APK не совпадает с данными сервера")
         expected_sha = str(info.get("apk_sha256") or "").lower()
-        if sha.hexdigest().lower() != expected_sha:
-            raise ApiError("SHA256 APK не совпадает")
-        os.replace(part_path, final_path)
-        return final_path
+        try:
+            result = stream_apk_to_file(
+                requests_get=requests.get,
+                url=url,
+                final_path=final_path,
+                expected_size=expected_size,
+                expected_sha256=expected_sha,
+                max_size=MAX_APK_SIZE,
+                allowed_hosts=ALLOWED_UPDATE_HOSTS,
+                cancel_requested=lambda: self._cancel_download,
+                progress_callback=self._note_download_progress,
+            )
+        except DownloadCancelled as exc:
+            raise ApiError(str(exc)) from exc
+        except ValueError as exc:
+            raise ApiError(str(exc)) from exc
+        return result.path
 
     def _verify_downloaded_apk(self, path, info):
         self._set_state("Проверяем файл...")
@@ -3952,6 +3955,8 @@ class MobileUpdateScreen(Screen):
         self.state_text = "Ошибка проверки" if "SHA256" in str(exc) else "Ошибка загрузки"
         self.status_text = str(exc)
         self.progress_text = ""
+        if self._progress_trigger is not None:
+            self._progress_trigger.cancel()
         self._cleanup_part_file()
         self._cleanup_final_file()
 
@@ -3964,6 +3969,8 @@ class MobileUpdateScreen(Screen):
         self.progress_text = "100%"
         self.can_download = False
         self.can_install = True
+        if self._progress_trigger is not None:
+            self._progress_trigger.cancel()
 
     def _cleanup_part_file(self):
         if not self.update_info:
@@ -3991,10 +3998,39 @@ class MobileUpdateScreen(Screen):
             except OSError:
                 pass
 
-    def _update_progress(self, total, content_length):
-        if content_length:
-            percent = max(0, min(100, int(total * 100 / content_length)))
-            Clock.schedule_once(lambda dt, percent=percent: self._set_progress(percent))
+    def _reset_download_progress_state(self):
+        with self._progress_lock:
+            self._progress_downloaded = 0
+            self._progress_total = 0
+            self._progress_percent = 0
+            self._progress_ui_updates = 0
+        self._last_logged_mb = -1
+        self._logged_first_mb = False
+        if self._progress_trigger is not None:
+            self._progress_trigger.cancel()
+
+    def _note_download_progress(self, total, content_length):
+        percent = max(0, min(100, int(total * 100 / content_length))) if content_length else 0
+        with self._progress_lock:
+            self._progress_downloaded = total
+            self._progress_total = content_length
+            self._progress_percent = percent
+        self._log_download_memory("download-progress", total, percent)
+        self._progress_trigger()
+
+    def _flush_download_progress(self, *_):
+        with self._progress_lock:
+            percent = self._progress_percent
+            downloaded = self._progress_downloaded
+            total = self._progress_total
+            self._progress_ui_updates += 1
+            updates = self._progress_ui_updates
+        self._set_progress(percent)
+        if UPDATE_CHANNEL == "TEST" and updates <= 3:
+            Logger.info(
+                f"MobileUpdate: ui-progress percent={percent} "
+                f"downloaded={downloaded} total={total} ui_updates={updates}"
+            )
 
     def _set_progress(self, percent):
         self.state_text = f"Загружаем {percent}%"
@@ -4002,6 +4038,40 @@ class MobileUpdateScreen(Screen):
 
     def _set_state(self, text):
         Clock.schedule_once(lambda dt, text=text: setattr(self, "state_text", text))
+
+    def _log_download_memory(self, label, downloaded, percent):
+        if UPDATE_CHANNEL != "TEST":
+            return
+        mb = downloaded // (1024 * 1024)
+        should_log = label != "download-progress"
+        if label == "download-progress":
+            if downloaded >= 1024 * 1024 and not self._logged_first_mb:
+                self._logged_first_mb = True
+                should_log = True
+            elif mb >= 5 and mb % 5 == 0 and mb != self._last_logged_mb:
+                should_log = True
+        if not should_log:
+            return
+        self._last_logged_mb = mb
+        rss = ""
+        vm_size = ""
+        try:
+            with open("/proc/self/status", "r", encoding="utf-8") as fh:
+                for line in fh:
+                    if line.startswith("VmRSS:"):
+                        rss = line.split(":", 1)[1].strip()
+                    elif line.startswith("VmSize:"):
+                        vm_size = line.split(":", 1)[1].strip()
+                    if rss and vm_size:
+                        break
+        except OSError:
+            return
+        with self._progress_lock:
+            ui_updates = self._progress_ui_updates
+        Logger.info(
+            f"MobileUpdate: memory label={label} VmRSS={rss} VmSize={vm_size} "
+            f"downloaded={downloaded} percent={percent} ui_updates={ui_updates}"
+        )
 
     def _format_size(self, size):
         if size <= 0:

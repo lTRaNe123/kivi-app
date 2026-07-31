@@ -1051,17 +1051,20 @@
                     FinePrint:
                         text: root.current_version_text
                         size_hint_y: None
+                        text_size: self.width, None
                         height: dp(34)
 
                     FinePrint:
                         text: root.last_checked_text
                         size_hint_y: None
+                        text_size: self.width, None
                         height: dp(30)
 
                     FinePrint:
                         text: root.transport_text
                         color: 0.70, 0.18, 0.16, 1
                         size_hint_y: None
+                        text_size: self.width, None
                         height: dp(42) if self.text else 0
                         opacity: 1 if self.text else 0
 
@@ -1076,11 +1079,13 @@
                     FinePrint:
                         text: root.found_version_text
                         size_hint_y: None
+                        text_size: self.width, None
                         height: dp(30)
 
                     FinePrint:
                         text: root.apk_size_text
                         size_hint_y: None
+                        text_size: self.width, None
                         height: dp(30) if self.text else 0
                         opacity: 1 if self.text else 0
 
@@ -1088,6 +1093,7 @@
                         text: root.required_text
                         bold: True
                         size_hint_y: None
+                        text_size: self.width, None
                         height: dp(30) if self.text else 0
                         opacity: 1 if self.text else 0
 
@@ -1095,6 +1101,7 @@
                         text: root.release_notes_text
                         valign: "top"
                         size_hint_y: None
+                        text_size: self.width, None
                         height: max(dp(70), self.texture_size[1] + dp(12)) if self.text else 0
                         opacity: 1 if self.text else 0
 
@@ -1107,12 +1114,14 @@
                         text: root.progress_text
                         bold: True
                         size_hint_y: None
-                        height: dp(28) if self.text else 0
-                        opacity: 1 if self.text else 0
+                        text_size: self.width, None
+                        height: dp(28)
+                        opacity: 1
 
                     FinePrint:
                         text: root.install_text
                         size_hint_y: None
+                        text_size: self.width, None
                         height: dp(44)
 
                     FinePrint:
@@ -1120,6 +1129,7 @@
                         color: 0.72, 0.08, 0.08, 1
                         valign: "top"
                         size_hint_y: None
+                        text_size: self.width, None
                         height: max(dp(44), self.texture_size[1] + dp(12)) if self.text else 0
                         opacity: 1 if self.text else 0
 
