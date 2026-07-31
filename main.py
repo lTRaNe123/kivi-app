@@ -2874,17 +2874,22 @@ class EmployeeOrdersScreen(Screen):
 
     def _row_payload(self, order):
         created = (order.get("created_at") or "").split(" ")[0]
+        if len(created) == 10 and created[4] == "-" and created[7] == "-":
+            created = f"{created[8:10]}.{created[5:7]}.{created[0:4]}"
         lines_count = int(order.get("lines_count") or 0)
         total_quantity = int(order.get("total_quantity") or 0)
-        test = " · TEST" if order.get("is_test") else ""
+        line_word = "строка" if lines_count == 1 else ("строки" if 2 <= lines_count <= 4 else "строк")
+        qty_word = "шт."
+        test = "TEST" if order.get("is_test") else ""
         return {
             "order_id": int(order.get("id") or 0),
             "order_number": order.get("order_number") or "",
             "kit_title": order.get("kit_title") or "",
-            "meta": f"{created} · строк: {lines_count} · всего: {total_quantity}{test}",
+            "meta": f"{created} · {lines_count} {line_word} · {total_quantity} {qty_word}",
             "price_text": employee_stage_label(order.get("current_stage")),
             "status_text": "TEST" if order.get("is_test") else chevron_status_label(order.get("status")),
             "status_color": [0.45, 0.50, 0.30, 1] if order.get("is_test") else chevron_status_color(order.get("status")),
+            "test_text": test,
         }
 
     def open_order(self, order_id):
@@ -4061,6 +4066,8 @@ class RootWidget(ScreenManager):
 
 
 class SixnerInventoryApp(App):
+    is_android = BooleanProperty(kivy_platform == "android")
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.current_user = None
