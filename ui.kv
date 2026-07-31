@@ -848,9 +848,173 @@
             height: dp(28)
 
         SecondaryButton:
+            text: "Проверить обновления"
+            on_release: root.goto_mobile_update()
+
+        SecondaryButton:
             text: "Выйти"
             on_release:
                 app.logout()
+
+
+<MobileUpdateScreen>:
+    AppPageLayout:
+        orientation: "vertical"
+        padding: dp(16), dp(20)
+        spacing: dp(10)
+        canvas.before:
+            Color:
+                rgba: 0.965, 0.965, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        BoxLayout:
+            size_hint_y: None
+            height: dp(44)
+            spacing: dp(8)
+
+            SecondaryButton:
+                text: "Назад"
+                size_hint_x: None
+                width: dp(92)
+                on_release: root.go_back()
+
+            ScreenSubtitle:
+                text: "Обновление приложения"
+                halign: "right"
+                text_size: self.size
+
+        ScreenTitle:
+            text: "ОБНОВЛЕНИЕ"
+
+        ScrollView:
+            do_scroll_x: False
+
+            BoxLayout:
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: dp(10)
+
+                CardBox:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: self.minimum_height
+
+                    ScreenSubtitle:
+                        text: "Текущая сборка"
+
+                    FinePrint:
+                        text: root.current_version_text
+                        size_hint_y: None
+                        height: dp(34)
+
+                    FinePrint:
+                        text: root.last_checked_text
+                        size_hint_y: None
+                        height: dp(30)
+
+                    FinePrint:
+                        text: root.transport_text
+                        color: 0.70, 0.18, 0.16, 1
+                        size_hint_y: None
+                        height: dp(42) if self.text else 0
+                        opacity: 1 if self.text else 0
+
+                CardBox:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: self.minimum_height
+
+                    ScreenSubtitle:
+                        text: root.state_text
+
+                    FinePrint:
+                        text: root.found_version_text
+                        size_hint_y: None
+                        height: dp(30)
+
+                    FinePrint:
+                        text: root.apk_size_text
+                        size_hint_y: None
+                        height: dp(30) if self.text else 0
+                        opacity: 1 if self.text else 0
+
+                    FinePrint:
+                        text: root.required_text
+                        bold: True
+                        size_hint_y: None
+                        height: dp(30) if self.text else 0
+                        opacity: 1 if self.text else 0
+
+                    FinePrint:
+                        text: root.release_notes_text
+                        valign: "top"
+                        size_hint_y: None
+                        height: max(dp(70), self.texture_size[1] + dp(12)) if self.text else 0
+                        opacity: 1 if self.text else 0
+
+                CardBox:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: self.minimum_height
+
+                    FinePrint:
+                        text: root.progress_text
+                        bold: True
+                        size_hint_y: None
+                        height: dp(28) if self.text else 0
+                        opacity: 1 if self.text else 0
+
+                    FinePrint:
+                        text: root.install_text
+                        size_hint_y: None
+                        height: dp(44)
+
+                    FinePrint:
+                        text: root.status_text
+                        color: 0.72, 0.08, 0.08, 1
+                        valign: "top"
+                        size_hint_y: None
+                        height: max(dp(44), self.texture_size[1] + dp(12)) if self.text else 0
+                        opacity: 1 if self.text else 0
+
+        BoxLayout:
+            orientation: "vertical"
+            size_hint_y: None
+            height: self.minimum_height
+            spacing: dp(8)
+
+            PrimaryButton:
+                text: "Проверить обновления" if not root.busy else "Проверяем..."
+                disabled: root.busy
+                on_release: root.check_update()
+
+            PrimaryButton:
+                text: "Скачать обновление"
+                disabled: not root.can_download or root.busy
+                on_release: root.download_update()
+
+            PrimaryButton:
+                text: "Установить"
+                disabled: not root.can_install or root.busy
+                on_release: root.install_update()
+
+            BoxLayout:
+                size_hint_y: None
+                height: dp(44)
+                spacing: dp(8)
+
+                SecondaryButton:
+                    text: "Повторить"
+                    disabled: root.busy
+                    on_release: root.check_update()
+
+                SecondaryButton:
+                    text: "Позже"
+                    disabled: not root.can_later
+                    on_release: root.go_back()
 
 
 <FinanceAccountScreen>:

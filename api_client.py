@@ -1,8 +1,10 @@
 # api_client.py
 import json
+import threading
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Optional
+from urllib.parse import urlparse
 
 import requests
 
@@ -59,6 +61,7 @@ class ApiClient:
         self.session = requests.Session()
         self.user_id: Optional[int] = None
         self.api_token: Optional[str] = None
+        self._mobile_update_lock = threading.Lock()
 
     # ----- служебные методы -----
 
@@ -733,6 +736,87 @@ class ApiClient:
                 "role_codes": json.dumps(role_codes or [], ensure_ascii=False),
             },
         )
+
+    def check_mobile_update(
+        self,
+        platform: str,
+        channel: str,
+        current_version_code: int,
+        package_name: str,
+    ) -> Dict[str, Any]:
+        """
+        GET /api/mobile_update.php
+
+        Endpoint is intentionally unauthenticated: it must work before login.
+        Version comparison is integer-only by version_code.
+        """
+        if not self._mobile_update_lock.acquire(blocking=False):
+            raise ApiError("Проверка обновлений уже выполняется")
+
+        try:
+            params = {
+                "platform": str(platform or "").lower(),
+                "channel": str(channel or "").upper(),
+                "current_version_code": int(current_version_code),
+                "package_name": str(package_name or ""),
+            }
+            resp = self.session.get(
+                self._url("mobile_update.php"),
+                params=params,
+                timeout=12,
+            )
+        except requests.RequestException as e:
+            raise ApiError(f"Сетевая ошибка проверки обновлений: {e}") from e
+        finally:
+            self._mobile_update_lock.release()
+
+        if resp.status_code != 200:
+            raise ApiError(f"HTTP {resp.status_code} при проверке обновлений")
+
+        try:
+            payload = resp.json()
+        except json.JSONDecodeError as e:
+            text = resp.text[:200].replace("\n", " ")
+            raise ApiError(f"Неверный JSON проверки обновлений: {text}") from e
+
+        if not isinstance(payload, dict):
+            raise ApiError("API обновлений вернул некорректный формат")
+        if not payload.get("ok"):
+            raise ApiError(str(payload.get("error") or "Проверка обновлений отклонена"))
+        if "update_available" not in payload:
+            raise ApiError("API обновлений не вернул update_available")
+
+        if payload.get("update_available"):
+            required = [
+                "version_code",
+                "version_name",
+                "package_name",
+                "apk_url",
+                "apk_sha256",
+                "apk_size",
+            ]
+            missing = [key for key in required if key not in payload]
+            if missing:
+                raise ApiError("API обновлений не вернул поля: " + ", ".join(missing))
+
+            parsed = urlparse(str(payload.get("apk_url") or ""))
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                raise ApiError("API обновлений вернул недопустимый URL APK")
+
+            sha = str(payload.get("apk_sha256") or "").lower()
+            if len(sha) != 64 or any(ch not in "0123456789abcdef" for ch in sha):
+                raise ApiError("API обновлений вернул некорректный SHA256 APK")
+
+            try:
+                if int(payload.get("version_code")) <= int(current_version_code):
+                    raise ApiError("API обновлений вернул версию не новее текущей")
+                payload["apk_size"] = int(payload.get("apk_size") or 0)
+                if payload["apk_size"] < 0:
+                    raise ValueError
+            except (TypeError, ValueError) as e:
+                raise ApiError("API обновлений вернул некорректные числовые поля") from e
+
+        return payload
 
 
 # ----- ГЛОБАЛЬНЫЙ КЛИЕНТ ДЛЯ main.py -----

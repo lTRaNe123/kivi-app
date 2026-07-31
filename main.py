@@ -1,10 +1,14 @@
 # main.py
 import ctypes
+import hashlib
+import json
+import os
 import platform
 import time
 import threading
 import uuid
 from collections import defaultdict
+from urllib.parse import urlparse
 
 if platform.system() == "Windows":
     try:
@@ -42,8 +46,14 @@ from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.spinner import Spinner
 from kivy.uix.textinput import TextInput
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
+from kivy.utils import platform as kivy_platform
 
 from api_client import api_client, ApiError
+from app_version import APP_VERSION_CODE, APP_VERSION_NAME, PACKAGE_NAME, UPDATE_CHANNEL
+
+
+MAX_APK_SIZE = 200 * 1024 * 1024
+ALLOWED_UPDATE_HOSTS = {"82.25.61.87"}
 
 
 OPEN_MODALS = []
@@ -705,6 +715,9 @@ class UserHomeScreen(Screen):
 
     def goto_employee_panel(self):
         App.get_running_app().navigate("employee_panel")
+
+    def goto_mobile_update(self):
+        App.get_running_app().navigate("mobile_update")
 
 
 # ---------- ЭКРАН: ЛИЧНЫЙ КАБИНЕТ ----------
@@ -3606,6 +3619,398 @@ class EmployeePanelScreen(Screen):
         App.get_running_app().back()
 
 
+# ---------- ЭКРАН: ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ----------
+
+
+class MobileUpdateScreen(Screen):
+    current_version_text = StringProperty("")
+    state_text = StringProperty("Нажмите «Проверить обновления»")
+    last_checked_text = StringProperty("Проверок ещё не было")
+    found_version_text = StringProperty("Новая версия не найдена")
+    release_notes_text = StringProperty("")
+    apk_size_text = StringProperty("")
+    required_text = StringProperty("")
+    transport_text = StringProperty("")
+    install_text = StringProperty("")
+    status_text = StringProperty("")
+    progress_text = StringProperty("")
+    can_download = BooleanProperty(False)
+    can_install = BooleanProperty(False)
+    can_later = BooleanProperty(True)
+    busy = BooleanProperty(False)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.update_info = None
+        self.downloaded_apk_path = ""
+        self._check_in_progress = False
+        self._download_in_progress = False
+        self._cancel_download = False
+
+    def on_pre_enter(self, *args):
+        self.current_version_text = (
+            f"Текущая версия: {APP_VERSION_NAME} "
+            f"(code {APP_VERSION_CODE}), канал {UPDATE_CHANNEL}"
+        )
+        self.install_text = (
+            "Установка обновления доступна только на Android"
+            if kivy_platform != "android"
+            else "После проверки APK откроется системный установщик Android"
+        )
+
+    def check_update(self, silent=False):
+        if self._check_in_progress:
+            if not silent:
+                self.status_text = "Проверка уже выполняется"
+            return
+        self._check_in_progress = True
+        self.busy = True
+        if not silent:
+            self.state_text = "Проверяем..."
+            self.status_text = ""
+        self.can_download = False
+        self.can_install = False
+
+        def worker():
+            try:
+                payload = api_client.check_mobile_update(
+                    "android",
+                    UPDATE_CHANNEL,
+                    APP_VERSION_CODE,
+                    PACKAGE_NAME,
+                )
+            except Exception as exc:
+                Clock.schedule_once(lambda dt, exc=exc: self._check_failed(exc, silent))
+                return
+            Clock.schedule_once(lambda dt, payload=payload: self._check_finished(payload, silent))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _check_failed(self, exc, silent):
+        self._check_in_progress = False
+        self.busy = False
+        if silent:
+            return
+        self.state_text = "Ошибка проверки"
+        self.status_text = str(exc)
+        self.last_checked_text = self._format_last_checked()
+
+    def _check_finished(self, payload, silent):
+        self._check_in_progress = False
+        self.busy = False
+        self.last_checked_text = self._format_last_checked()
+        app = App.get_running_app()
+        if app:
+            app.save_mobile_update_check_timestamp()
+
+        if not payload.get("update_available"):
+            self.update_info = None
+            self.state_text = "Установлена актуальная версия"
+            self.found_version_text = "Новая версия не найдена"
+            self.release_notes_text = ""
+            self.apk_size_text = ""
+            self.required_text = ""
+            self.transport_text = ""
+            self.status_text = "" if not silent else self.status_text
+            self.can_download = False
+            self.can_install = False
+            return
+
+        payload = dict(payload)
+        if payload.get("channel") == "TEST":
+            payload["required_update"] = False
+        self.update_info = payload
+        self.downloaded_apk_path = ""
+        version_name = payload.get("version_name") or ""
+        version_code = int(payload.get("version_code") or 0)
+        self.state_text = f"Доступна версия {version_name}"
+        self.found_version_text = f"{version_name} (code {version_code})"
+        self.release_notes_text = str(payload.get("release_notes") or "Описание изменений не указано")
+        self.apk_size_text = self._format_size(int(payload.get("apk_size") or 0))
+        self.required_text = "Обязательное обновление" if payload.get("required_update") else "Необязательное обновление"
+        if payload.get("transport_secure") is False:
+            self.transport_text = "Тестовый канал обновлений. Транспорт HTTP не защищён."
+        else:
+            self.transport_text = "Транспорт обновлений защищён"
+        self.can_download = True
+        self.can_install = False
+        self.can_later = not bool(payload.get("required_update"))
+        self.status_text = "" if not silent else self.status_text
+
+        min_supported = payload.get("min_supported_version_code")
+        if min_supported is not None and APP_VERSION_CODE < int(min_supported):
+            self.required_text = "Требуется обновление для продолжения"
+            self.can_later = False
+            if app:
+                app.navigate("mobile_update", reset=True)
+        elif silent and app and app.root and app.root.has_screen("user_home"):
+            home = app.root.get_screen("user_home")
+            home.status_text = f"Доступно обновление ВОСК {version_name}"
+
+    def download_update(self):
+        if self._download_in_progress:
+            self.status_text = "Загрузка уже выполняется"
+            return
+        if not self.update_info:
+            self.status_text = "Сначала проверьте обновления"
+            return
+        self._download_in_progress = True
+        self._cancel_download = False
+        self.busy = True
+        self.can_download = False
+        self.can_install = False
+        self.state_text = "Загружаем 0%"
+        self.progress_text = "0%"
+        self.status_text = ""
+
+        def worker():
+            try:
+                path = self._download_apk(self.update_info)
+                self._verify_downloaded_apk(path, self.update_info)
+            except Exception as exc:
+                Clock.schedule_once(lambda dt, exc=exc: self._download_failed(exc))
+                return
+            Clock.schedule_once(lambda dt, path=path: self._download_finished(path))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def cancel_download(self):
+        self._cancel_download = True
+
+    def _download_apk(self, info):
+        import requests
+
+        url = str(info.get("apk_url") or "")
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or parsed.hostname not in ALLOWED_UPDATE_HOSTS:
+            raise ApiError("Хост обновления не разрешён")
+        if UPDATE_CHANNEL == "PRODUCTION" and parsed.scheme != "https":
+            raise ApiError("PRODUCTION-обновления разрешены только по HTTPS")
+
+        expected_size = int(info.get("apk_size") or 0)
+        if expected_size > MAX_APK_SIZE:
+            raise ApiError("APK больше допустимого лимита 200 MB")
+
+        target_dir = self._updates_cache_dir()
+        os.makedirs(target_dir, exist_ok=True)
+        version_code = int(info.get("version_code") or 0)
+        final_path = os.path.join(target_dir, f"vosk-update-{version_code}.apk")
+        part_path = final_path + ".part"
+        if os.path.exists(part_path):
+            os.remove(part_path)
+
+        total = 0
+        sha = hashlib.sha256()
+        with requests.get(url, stream=True, timeout=(8, 30), allow_redirects=True) as resp:
+            resp.raise_for_status()
+            final_host = urlparse(resp.url).hostname
+            if final_host not in ALLOWED_UPDATE_HOSTS:
+                raise ApiError("Редирект APK ведёт на неразрешённый хост")
+            content_length = int(resp.headers.get("Content-Length") or expected_size or 0)
+            if content_length > MAX_APK_SIZE:
+                raise ApiError("APK больше допустимого лимита 200 MB")
+            with open(part_path, "wb") as fh:
+                for chunk in resp.iter_content(chunk_size=1024 * 128):
+                    if self._cancel_download:
+                        raise ApiError("Загрузка отменена")
+                    if not chunk:
+                        continue
+                    total += len(chunk)
+                    if total > MAX_APK_SIZE:
+                        raise ApiError("APK больше допустимого лимита 200 MB")
+                    sha.update(chunk)
+                    fh.write(chunk)
+                    self._update_progress(total, content_length)
+
+        if expected_size and total != expected_size:
+            raise ApiError("Размер APK не совпадает с данными сервера")
+        expected_sha = str(info.get("apk_sha256") or "").lower()
+        if sha.hexdigest().lower() != expected_sha:
+            raise ApiError("SHA256 APK не совпадает")
+        os.replace(part_path, final_path)
+        return final_path
+
+    def _verify_downloaded_apk(self, path, info):
+        self._set_state("Проверяем файл...")
+        if not os.path.isfile(path):
+            raise ApiError("APK не найден после загрузки")
+        expected_size = int(info.get("apk_size") or 0)
+        actual_size = os.path.getsize(path)
+        if expected_size and actual_size != expected_size:
+            raise ApiError("Размер APK не совпадает")
+        sha = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                sha.update(chunk)
+        if sha.hexdigest().lower() != str(info.get("apk_sha256") or "").lower():
+            raise ApiError("SHA256 APK не совпадает")
+        if int(info.get("version_code") or 0) <= APP_VERSION_CODE:
+            raise ApiError("APK не новее текущей версии")
+        if str(info.get("package_name") or "") != PACKAGE_NAME:
+            raise ApiError("Package name обновления не совпадает")
+        if kivy_platform == "android":
+            self._verify_android_package(path, info)
+
+    def _verify_android_package(self, path, info):
+        from jnius import autoclass
+
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        PackageManager = autoclass("android.content.pm.PackageManager")
+        Build = autoclass("android.os.Build")
+        activity = PythonActivity.mActivity
+        pm = activity.getPackageManager()
+        flags = PackageManager.GET_SIGNING_CERTIFICATES if Build.VERSION.SDK_INT >= 28 else PackageManager.GET_SIGNATURES
+        archive = pm.getPackageArchiveInfo(path, flags)
+        if archive is None:
+            raise ApiError("Android не распознал файл как APK")
+        if str(archive.packageName) != PACKAGE_NAME:
+            raise ApiError("Package name APK не совпадает")
+        archive_code = int(archive.getLongVersionCode()) if Build.VERSION.SDK_INT >= 28 else int(archive.versionCode)
+        if archive_code != int(info.get("version_code") or 0):
+            raise ApiError("Version code APK не совпадает с сервером")
+        if archive_code <= APP_VERSION_CODE:
+            raise ApiError("APK не новее текущей версии")
+        installed = pm.getPackageInfo(PACKAGE_NAME, flags)
+        if not self._android_signatures_match(installed, archive, Build):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+            raise ApiError("Обновление подписано другим ключом")
+
+    def _android_signatures_match(self, installed, archive, Build):
+        if Build.VERSION.SDK_INT >= 28:
+            left = installed.signingInfo.getApkContentsSigners()
+            right = archive.signingInfo.getApkContentsSigners()
+        else:
+            left = installed.signatures
+            right = archive.signatures
+        if len(left) != len(right):
+            return False
+        left_values = sorted([sig.toCharsString() for sig in left])
+        right_values = sorted([sig.toCharsString() for sig in right])
+        return left_values == right_values
+
+    def install_update(self):
+        if kivy_platform != "android":
+            self.status_text = "Установка обновления доступна только на Android"
+            return
+        if not self.downloaded_apk_path:
+            self.status_text = "Сначала скачайте обновление"
+            return
+        try:
+            self._verify_downloaded_apk(self.downloaded_apk_path, self.update_info or {})
+            self._open_android_installer(self.downloaded_apk_path)
+            self.state_text = "Открыт системный установщик"
+            self.status_text = "Подтвердите установку в системном окне Android"
+        except Exception as exc:
+            self.status_text = str(exc)
+
+    def _open_android_installer(self, path):
+        from jnius import autoclass, cast
+
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        Intent = autoclass("android.content.Intent")
+        Uri = autoclass("android.net.Uri")
+        File = autoclass("java.io.File")
+        FileProvider = autoclass("androidx.core.content.FileProvider")
+        Settings = autoclass("android.provider.Settings")
+        Build = autoclass("android.os.Build")
+
+        activity = PythonActivity.mActivity
+        pm = activity.getPackageManager()
+        if Build.VERSION.SDK_INT >= 26 and not pm.canRequestPackageInstalls():
+            uri = Uri.parse("package:" + PACKAGE_NAME)
+            intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, uri)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity.startActivity(intent)
+            raise ApiError("Разрешите установку из этого источника и повторно нажмите «Установить»")
+
+        apk_file = File(path)
+        content_uri = FileProvider.getUriForFile(activity, PACKAGE_NAME + ".fileprovider", apk_file)
+        intent = Intent(Intent.ACTION_VIEW)
+        intent.setDataAndType(content_uri, "application/vnd.android.package-archive")
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        activity.startActivity(intent)
+
+    def _updates_cache_dir(self):
+        app = App.get_running_app()
+        base = app.user_data_dir if app else os.getcwd()
+        return os.path.join(base, "cache", "updates")
+
+    def _download_failed(self, exc):
+        self._download_in_progress = False
+        self.busy = False
+        self.can_download = self.update_info is not None
+        self.can_install = False
+        self.state_text = "Ошибка проверки" if "SHA256" in str(exc) else "Ошибка загрузки"
+        self.status_text = str(exc)
+        self.progress_text = ""
+        self._cleanup_part_file()
+        self._cleanup_final_file()
+
+    def _download_finished(self, path):
+        self._download_in_progress = False
+        self.busy = False
+        self.downloaded_apk_path = path
+        self.state_text = "Готово к установке"
+        self.status_text = "Файл скачан и проверен"
+        self.progress_text = "100%"
+        self.can_download = False
+        self.can_install = True
+
+    def _cleanup_part_file(self):
+        if not self.update_info:
+            return
+        part_path = os.path.join(
+            self._updates_cache_dir(),
+            f"vosk-update-{int(self.update_info.get('version_code') or 0)}.apk.part",
+        )
+        if os.path.exists(part_path):
+            try:
+                os.remove(part_path)
+            except OSError:
+                pass
+
+    def _cleanup_final_file(self):
+        if not self.update_info:
+            return
+        final_path = os.path.join(
+            self._updates_cache_dir(),
+            f"vosk-update-{int(self.update_info.get('version_code') or 0)}.apk",
+        )
+        if os.path.exists(final_path):
+            try:
+                os.remove(final_path)
+            except OSError:
+                pass
+
+    def _update_progress(self, total, content_length):
+        if content_length:
+            percent = max(0, min(100, int(total * 100 / content_length)))
+            Clock.schedule_once(lambda dt, percent=percent: self._set_progress(percent))
+
+    def _set_progress(self, percent):
+        self.state_text = f"Загружаем {percent}%"
+        self.progress_text = f"{percent}%"
+
+    def _set_state(self, text):
+        Clock.schedule_once(lambda dt, text=text: setattr(self, "state_text", text))
+
+    def _format_size(self, size):
+        if size <= 0:
+            return "Размер APK не указан"
+        mb = size / 1024 / 1024
+        return f"Размер APK: {mb:.1f} MB"
+
+    def _format_last_checked(self):
+        return "Последняя проверка: " + time.strftime("%d.%m.%Y %H:%M")
+
+    def go_back(self):
+        App.get_running_app().back()
+
+
 # ---------- ROOT & APP ----------
 
 
@@ -3662,6 +4067,7 @@ class SixnerInventoryApp(App):
         self._last_exit_prompt = 0
         self._last_back_key_at = 0
         self._allow_close_events_at = float("inf")
+        self._silent_update_check_started = False
 
     def build(self):
         self.title = "ВОСК"
@@ -3693,6 +4099,7 @@ class SixnerInventoryApp(App):
         sm.add_widget(TransferCreateScreen(name="transfer_create"))
         sm.add_widget(FormsMenuScreen(name="forms_menu"))
         sm.add_widget(FormViewScreen(name="form_view"))
+        sm.add_widget(MobileUpdateScreen(name="mobile_update"))
         sm.current = "login"
         self._validate_startup_ui(sm)
         Window.bind(on_keyboard=self._on_keyboard)
@@ -3704,6 +4111,7 @@ class SixnerInventoryApp(App):
         self._last_back_key_at = 0
         self._allow_close_events_at = time.monotonic() + 0.5
         Clock.schedule_once(self._log_ui_ready, 0)
+        Clock.schedule_once(self._maybe_silent_mobile_update_check, 2)
 
     def _log_ui_ready(self, *_):
         screen = self.root.current_screen if self.root else None
@@ -3780,6 +4188,36 @@ class SixnerInventoryApp(App):
         api_client.user_id = None
         if self.root:
             self.root.navigate("login", reset=True)
+
+    def _mobile_update_state_path(self):
+        return os.path.join(self.user_data_dir, "mobile_update_state.json")
+
+    def _read_mobile_update_state(self):
+        try:
+            with open(self._mobile_update_state_path(), "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            return data if isinstance(data, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def save_mobile_update_check_timestamp(self):
+        try:
+            os.makedirs(self.user_data_dir, exist_ok=True)
+            with open(self._mobile_update_state_path(), "w", encoding="utf-8") as fh:
+                json.dump({"last_check_at": int(time.time())}, fh)
+        except OSError as exc:
+            Logger.warning(f"SixnerInventoryApp: cannot save update timestamp: {exc}")
+
+    def _maybe_silent_mobile_update_check(self, *_):
+        if self._silent_update_check_started:
+            return
+        self._silent_update_check_started = True
+        state = self._read_mobile_update_state()
+        last_check_at = int(state.get("last_check_at") or 0)
+        if time.time() - last_check_at < 24 * 60 * 60:
+            return
+        if self.root and self.root.has_screen("mobile_update"):
+            self.root.get_screen("mobile_update").check_update(silent=True)
 
     def handle_back(self, source="navigation_back"):
         self._dismiss_stale_modals()

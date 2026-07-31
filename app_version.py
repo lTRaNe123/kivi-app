@@ -1,0 +1,5 @@
+APP_VERSION_NAME = "0.1.0"
+APP_VERSION_CODE = 1
+UPDATE_CHANNEL = "TEST"
+PACKAGE_NAME = "org.vangelagency.strigmobile"
+
