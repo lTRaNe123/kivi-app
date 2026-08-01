@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -12,12 +13,32 @@ class DownloadCancelled(Exception):
     pass
 
 
+class DownloadVerificationError(ValueError):
+    def __init__(self, message, *, label, stage):
+        super().__init__(message)
+        self.label = label
+        self.stage = stage
+
+
 @dataclass
 class DownloadResult:
     path: str
     size: int
     sha256: str
     progress_calls: int
+
+
+def normalize_sha256(value):
+    text = str(value or "").strip().lower()
+    if text.startswith("sha256:"):
+        text = text.split(":", 1)[1].strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", text):
+        raise DownloadVerificationError(
+            "SHA256 APK в ответе сервера имеет неверный формат",
+            label="sha-verification-error",
+            stage="sha-normalization",
+        )
+    return text
 
 
 def stream_apk_to_file(
@@ -33,12 +54,15 @@ def stream_apk_to_file(
     progress_callback=None,
     chunk_size=DEFAULT_CHUNK_SIZE,
     flush_interval=DEFAULT_FLUSH_INTERVAL,
+    replace_func=os.replace,
+    open_file=open,
 ):
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or parsed.hostname not in allowed_hosts:
         raise ValueError("Хост обновления не разрешён")
     if expected_size and expected_size > max_size:
         raise ValueError("APK больше допустимого лимита 200 MB")
+    normalized_expected_sha = normalize_sha256(expected_sha256)
 
     part_path = final_path + ".part"
     if os.path.exists(part_path):
@@ -60,7 +84,7 @@ def stream_apk_to_file(
             if content_length and content_length > max_size:
                 raise ValueError("APK больше допустимого лимита 200 MB")
 
-            with open(part_path, "wb") as fh:
+            with open_file(part_path, "wb") as fh:
                 for chunk in resp.iter_content(chunk_size=chunk_size):
                     if cancel_requested():
                         raise DownloadCancelled("Загрузка отменена")
@@ -77,7 +101,10 @@ def stream_apk_to_file(
                         bytes_since_flush = 0
                     if progress_callback:
                         progress_calls += 1
-                        progress_callback(total, content_length)
+                        try:
+                            progress_callback(total, content_length)
+                        except Exception:
+                            pass
                     chunk = None
                 fh.flush()
     except Exception:
@@ -88,21 +115,28 @@ def stream_apk_to_file(
         raise
 
     if expected_size and total != expected_size:
-        try:
-            os.remove(part_path)
-        except OSError:
-            pass
-        raise ValueError("Размер APK не совпадает с данными сервера")
+        raise DownloadVerificationError(
+            "Размер APK не совпадает с данными сервера",
+            label="size-verification-error",
+            stage="size-verification",
+        )
 
     actual_sha = sha.hexdigest().lower()
-    if actual_sha != expected_sha256.lower():
-        try:
-            os.remove(part_path)
-        except OSError:
-            pass
-        raise ValueError("SHA256 APK не совпадает")
+    if actual_sha != normalized_expected_sha:
+        raise DownloadVerificationError(
+            "SHA256 APK не совпадает",
+            label="sha-verification-error",
+            stage="sha-verification",
+        )
 
-    os.replace(part_path, final_path)
+    try:
+        replace_func(part_path, final_path)
+    except Exception as exc:
+        raise DownloadVerificationError(
+            "Не удалось завершить файл APK",
+            label="finalize-error",
+            stage="finalize",
+        ) from exc
     return DownloadResult(final_path, total, actual_sha, progress_calls)
 
 

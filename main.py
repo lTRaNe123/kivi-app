@@ -50,7 +50,12 @@ from kivy.utils import platform as kivy_platform
 
 from api_client import api_client, ApiError
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME, PACKAGE_NAME, UPDATE_CHANNEL
-from mobile_update_downloader import DownloadCancelled, stream_apk_to_file
+from mobile_update_downloader import (
+    DownloadCancelled,
+    DownloadVerificationError,
+    normalize_sha256,
+    stream_apk_to_file,
+)
 
 
 MAX_APK_SIZE = 200 * 1024 * 1024
@@ -3628,6 +3633,13 @@ class EmployeePanelScreen(Screen):
 # ---------- ЭКРАН: ОБНОВЛЕНИЕ ПРИЛОЖЕНИЯ ----------
 
 
+class UpdatePipelineError(ApiError):
+    def __init__(self, message, *, label, stage):
+        super().__init__(message)
+        self.label = label
+        self.stage = stage
+
+
 class MobileUpdateScreen(Screen):
     current_version_text = StringProperty("")
     state_text = StringProperty("Нажмите «Проверить обновления»")
@@ -3663,6 +3675,10 @@ class MobileUpdateScreen(Screen):
         self._progress_trigger = Clock.create_trigger(self._flush_download_progress, 0.2)
         self._idle_probe_events = []
         self._idle_probe_start_rss = None
+        self._download_stage = "idle"
+        self._download_error_label = "download-error"
+        self._download_computed_sha256 = ""
+        self._download_actual_size = 0
 
     def on_pre_enter(self, *args):
         self.current_version_text = (
@@ -3792,12 +3808,18 @@ class MobileUpdateScreen(Screen):
         self._log_download_memory("before-download", 0, 0)
 
         def worker():
+            path = ""
+            info = dict(self.update_info or {})
             try:
-                path = self._download_apk(self.update_info)
-                self._verify_downloaded_apk(path, self.update_info)
+                self._download_stage = "download-stream"
+                path = self._download_apk(info)
+                self._download_stage = "apk-validation"
+                self._verify_downloaded_apk(path, info)
             except Exception as exc:
-                self._log_download_memory("download-error", self._progress_downloaded, self._progress_percent)
-                Clock.schedule_once(lambda dt, exc=exc: self._download_failed(exc))
+                label = self._classify_update_error(exc)
+                self._log_update_pipeline_error(label, exc, info, path)
+                self._log_download_memory(label, self._progress_downloaded, self._progress_percent)
+                Clock.schedule_once(lambda dt, exc=exc, label=label: self._download_failed(exc, label))
                 return
             self._log_download_memory("download-complete", self._progress_downloaded, self._progress_percent)
             Clock.schedule_once(lambda dt, path=path: self._download_finished(path))
@@ -3827,7 +3849,9 @@ class MobileUpdateScreen(Screen):
         os.makedirs(target_dir, exist_ok=True)
         version_code = int(info.get("version_code") or 0)
         final_path = os.path.join(target_dir, f"vosk-update-{version_code}.apk")
-        expected_sha = str(info.get("apk_sha256") or "").lower()
+        expected_sha = normalize_sha256(info.get("apk_sha256") or "")
+        self._download_computed_sha256 = ""
+        self._download_actual_size = 0
         try:
             result = stream_apk_to_file(
                 requests_get=requests.get,
@@ -3840,36 +3864,49 @@ class MobileUpdateScreen(Screen):
                 cancel_requested=lambda: self._cancel_download,
                 progress_callback=self._note_download_progress,
             )
+            self._download_computed_sha256 = result.sha256
+            self._download_actual_size = result.size
         except DownloadCancelled as exc:
             raise ApiError(str(exc)) from exc
+        except DownloadVerificationError as exc:
+            raise UpdatePipelineError(str(exc), label=exc.label, stage=exc.stage) from exc
         except ValueError as exc:
             raise ApiError(str(exc)) from exc
         return result.path
 
     def _verify_downloaded_apk(self, path, info):
+        self._download_stage = "apk-file-exists"
         self._set_state("Проверяем файл...")
         if not os.path.isfile(path):
-            raise ApiError("APK не найден после загрузки")
+            raise UpdatePipelineError("APK не найден после загрузки", label="apk-validation-error", stage=self._download_stage)
+        self._download_stage = "apk-size-check"
         expected_size = int(info.get("apk_size") or 0)
         actual_size = os.path.getsize(path)
+        self._download_actual_size = actual_size
         if expected_size and actual_size != expected_size:
-            raise ApiError("Размер APK не совпадает")
+            raise UpdatePipelineError("Размер APK не совпадает", label="size-verification-error", stage=self._download_stage)
+        self._download_stage = "apk-sha-check"
         sha = hashlib.sha256()
         with open(path, "rb") as fh:
             for chunk in iter(lambda: fh.read(1024 * 1024), b""):
                 sha.update(chunk)
-        if sha.hexdigest().lower() != str(info.get("apk_sha256") or "").lower():
-            raise ApiError("SHA256 APK не совпадает")
+        self._download_computed_sha256 = sha.hexdigest().lower()
+        expected_sha = normalize_sha256(info.get("apk_sha256") or "")
+        if self._download_computed_sha256 != expected_sha:
+            raise UpdatePipelineError("SHA256 APK не совпадает", label="sha-verification-error", stage=self._download_stage)
+        self._download_stage = "apk-version-is-newer"
         if int(info.get("version_code") or 0) <= APP_VERSION_CODE:
-            raise ApiError("APK не новее текущей версии")
+            raise UpdatePipelineError("APK не новее текущей версии", label="apk-validation-error", stage=self._download_stage)
+        self._download_stage = "apk-package-name-response"
         if str(info.get("package_name") or "") != PACKAGE_NAME:
-            raise ApiError("Package name обновления не совпадает")
+            raise UpdatePipelineError("Package name обновления не совпадает", label="apk-validation-error", stage=self._download_stage)
         if kivy_platform == "android":
             self._verify_android_package(path, info)
 
     def _verify_android_package(self, path, info):
         from jnius import autoclass
 
+        self._download_stage = "android-package-info"
         PythonActivity = autoclass("org.kivy.android.PythonActivity")
         PackageManager = autoclass("android.content.pm.PackageManager")
         Build = autoclass("android.os.Build")
@@ -3878,21 +3915,20 @@ class MobileUpdateScreen(Screen):
         flags = PackageManager.GET_SIGNING_CERTIFICATES if Build.VERSION.SDK_INT >= 28 else PackageManager.GET_SIGNATURES
         archive = pm.getPackageArchiveInfo(path, flags)
         if archive is None:
-            raise ApiError("Android не распознал файл как APK")
+            raise UpdatePipelineError("Android не распознал файл как APK", label="apk-validation-error", stage=self._download_stage)
+        self._download_stage = "android-package-name"
         if str(archive.packageName) != PACKAGE_NAME:
-            raise ApiError("Package name APK не совпадает")
+            raise UpdatePipelineError("Package name APK не совпадает", label="apk-validation-error", stage=self._download_stage)
+        self._download_stage = "android-version-code"
         archive_code = int(archive.getLongVersionCode()) if Build.VERSION.SDK_INT >= 28 else int(archive.versionCode)
         if archive_code != int(info.get("version_code") or 0):
-            raise ApiError("Version code APK не совпадает с сервером")
+            raise UpdatePipelineError("Version code APK не совпадает с сервером", label="apk-validation-error", stage=self._download_stage)
         if archive_code <= APP_VERSION_CODE:
-            raise ApiError("APK не новее текущей версии")
+            raise UpdatePipelineError("APK не новее текущей версии", label="apk-validation-error", stage=self._download_stage)
+        self._download_stage = "android-signature-check"
         installed = pm.getPackageInfo(PACKAGE_NAME, flags)
         if not self._android_signatures_match(installed, archive, Build):
-            try:
-                os.remove(path)
-            except OSError:
-                pass
-            raise ApiError("Обновление подписано другим ключом")
+            raise UpdatePipelineError("Обновление подписано другим ключом", label="apk-validation-error", stage=self._download_stage)
 
     def _android_signatures_match(self, installed, archive, Build):
         if Build.VERSION.SDK_INT >= 28:
@@ -3915,11 +3951,17 @@ class MobileUpdateScreen(Screen):
             self.status_text = "Сначала скачайте обновление"
             return
         try:
+            self._download_stage = "installer-apk-validation"
             self._verify_downloaded_apk(self.downloaded_apk_path, self.update_info or {})
+            self._download_stage = "installer-launch"
             self._open_android_installer(self.downloaded_apk_path)
             self.state_text = "Открыт системный установщик"
             self.status_text = "Подтвердите установку в системном окне Android"
         except Exception as exc:
+            label = self._classify_update_error(exc)
+            if label == "download-error":
+                label = "installer-launch-error"
+            self._log_update_pipeline_error(label, exc, self.update_info or {}, self.downloaded_apk_path)
             self.status_text = str(exc)
 
     def _open_android_installer(self, path):
@@ -3936,18 +3978,26 @@ class MobileUpdateScreen(Screen):
         activity = PythonActivity.mActivity
         pm = activity.getPackageManager()
         if Build.VERSION.SDK_INT >= 26 and not pm.canRequestPackageInstalls():
+            self._download_stage = "installer-permission-settings"
             uri = Uri.parse("package:" + PACKAGE_NAME)
             intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, uri)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             activity.startActivity(intent)
-            raise ApiError("Разрешите установку из этого источника и повторно нажмите «Установить»")
+            raise UpdatePipelineError(
+                "Разрешите установку из этого источника и повторно нажмите «Установить»",
+                label="installer-launch-error",
+                stage=self._download_stage,
+            )
 
         apk_file = File(path)
+        self._download_stage = "installer-fileprovider-uri"
         content_uri = FileProvider.getUriForFile(activity, PACKAGE_NAME + ".fileprovider", apk_file)
+        self._download_stage = "installer-action-view-intent"
         intent = Intent(Intent.ACTION_VIEW)
         intent.setDataAndType(content_uri, "application/vnd.android.package-archive")
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        self._download_stage = "installer-start-activity"
         activity.startActivity(intent)
 
     def _updates_cache_dir(self):
@@ -3955,12 +4005,12 @@ class MobileUpdateScreen(Screen):
         base = app.user_data_dir if app else os.getcwd()
         return os.path.join(base, "cache", "updates")
 
-    def _download_failed(self, exc):
+    def _download_failed(self, exc, label="download-error"):
         self._download_in_progress = False
         self.busy = False
         self.can_download = self.update_info is not None
         self.can_install = False
-        self.state_text = "Ошибка проверки" if "SHA256" in str(exc) else "Ошибка загрузки"
+        self.state_text = "Ошибка проверки" if label != "download-error" else "Ошибка загрузки"
         self.status_text = str(exc)
         self.progress_text = ""
         self.progress_value = 0
@@ -4049,6 +4099,52 @@ class MobileUpdateScreen(Screen):
 
     def _set_state(self, text):
         Clock.schedule_once(lambda dt, text=text: setattr(self, "state_text", text))
+
+    def _classify_update_error(self, exc):
+        return getattr(exc, "label", "download-error")
+
+    def _expected_update_paths(self, info):
+        version_code = int((info or {}).get("version_code") or 0)
+        target_dir = self._updates_cache_dir()
+        final_path = os.path.join(target_dir, f"vosk-update-{version_code}.apk")
+        return final_path + ".part", final_path
+
+    def _safe_file_size(self, path):
+        try:
+            return os.path.getsize(path)
+        except OSError:
+            return -1
+
+    def _safe_file_exists(self, path):
+        try:
+            return os.path.exists(path)
+        except OSError:
+            return False
+
+    def _log_update_pipeline_error(self, label, exc, info, path):
+        if UPDATE_CHANNEL != "TEST":
+            return
+        part_path, final_path = self._expected_update_paths(info)
+        if path:
+            final_path = path
+            part_path = path + ".part"
+        expected_size = int((info or {}).get("apk_size") or 0)
+        expected_sha = ""
+        try:
+            expected_sha = normalize_sha256((info or {}).get("apk_sha256") or "")
+        except Exception:
+            expected_sha = str((info or {}).get("apk_sha256") or "")
+        Logger.exception(
+            "MobileUpdate: pipeline-error "
+            f"label={label} stage={getattr(exc, 'stage', self._download_stage)} "
+            f"exc_class={exc.__class__.__name__} exc_message={exc} "
+            f"expected_size={expected_size} actual_size={self._download_actual_size} "
+            f"expected_sha256={expected_sha} computed_sha256={self._download_computed_sha256} "
+            f"part_path={part_path} part_exists={self._safe_file_exists(part_path)} "
+            f"part_size={self._safe_file_size(part_path)} "
+            f"final_path={final_path} final_exists={self._safe_file_exists(final_path)} "
+            f"final_size={self._safe_file_size(final_path)}"
+        )
 
     def _iter_widget_classes(self, widget):
         yield widget.__class__.__name__
