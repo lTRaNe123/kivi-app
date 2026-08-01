@@ -49,6 +49,7 @@ from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.utils import platform as kivy_platform
 
 from api_client import api_client, ApiError
+from android_apk_metadata import ApkMetadataValidationError, validate_apk_metadata
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME, PACKAGE_NAME, UPDATE_CHANNEL
 from mobile_update_downloader import (
     DownloadCancelled,
@@ -3909,29 +3910,33 @@ class MobileUpdateScreen(Screen):
         self._download_stage = "android-package-info"
         PythonActivity = autoclass("org.kivy.android.PythonActivity")
         PackageManager = autoclass("android.content.pm.PackageManager")
-        Build = autoclass("android.os.Build")
+        BuildVersion = autoclass("android.os.Build$VERSION")
         activity = PythonActivity.mActivity
         pm = activity.getPackageManager()
-        flags = PackageManager.GET_SIGNING_CERTIFICATES if Build.VERSION.SDK_INT >= 28 else PackageManager.GET_SIGNATURES
-        archive = pm.getPackageArchiveInfo(path, flags)
-        if archive is None:
-            raise UpdatePipelineError("Android не распознал файл как APK", label="apk-validation-error", stage=self._download_stage)
-        self._download_stage = "android-package-name"
-        if str(archive.packageName) != PACKAGE_NAME:
-            raise UpdatePipelineError("Package name APK не совпадает", label="apk-validation-error", stage=self._download_stage)
-        self._download_stage = "android-version-code"
-        archive_code = int(archive.getLongVersionCode()) if Build.VERSION.SDK_INT >= 28 else int(archive.versionCode)
-        if archive_code != int(info.get("version_code") or 0):
-            raise UpdatePipelineError("Version code APK не совпадает с сервером", label="apk-validation-error", stage=self._download_stage)
-        if archive_code <= APP_VERSION_CODE:
-            raise UpdatePipelineError("APK не новее текущей версии", label="apk-validation-error", stage=self._download_stage)
+        sdk_int = int(BuildVersion.SDK_INT)
+        archive = pm.getPackageArchiveInfo(path, 0)
+        try:
+            validate_apk_metadata(
+                archive,
+                expected_package=PACKAGE_NAME,
+                expected_version_code=int(info.get("version_code") or 0),
+                current_version_code=APP_VERSION_CODE,
+                sdk_int=sdk_int,
+            )
+        except ApkMetadataValidationError as exc:
+            self._download_stage = exc.stage
+            raise UpdatePipelineError(str(exc), label=exc.label, stage=exc.stage) from exc
         self._download_stage = "android-signature-check"
+        flags = PackageManager.GET_SIGNING_CERTIFICATES if sdk_int >= 28 else PackageManager.GET_SIGNATURES
         installed = pm.getPackageInfo(PACKAGE_NAME, flags)
-        if not self._android_signatures_match(installed, archive, Build):
+        signed_archive = pm.getPackageArchiveInfo(path, flags)
+        if signed_archive is None:
+            raise UpdatePipelineError("Android не распознал подпись APK", label="apk-validation-error", stage=self._download_stage)
+        if not self._android_signatures_match(installed, signed_archive, sdk_int):
             raise UpdatePipelineError("Обновление подписано другим ключом", label="apk-validation-error", stage=self._download_stage)
 
-    def _android_signatures_match(self, installed, archive, Build):
-        if Build.VERSION.SDK_INT >= 28:
+    def _android_signatures_match(self, installed, archive, sdk_int):
+        if sdk_int >= 28:
             left = installed.signingInfo.getApkContentsSigners()
             right = archive.signingInfo.getApkContentsSigners()
         else:
@@ -3973,11 +3978,12 @@ class MobileUpdateScreen(Screen):
         File = autoclass("java.io.File")
         FileProvider = autoclass("androidx.core.content.FileProvider")
         Settings = autoclass("android.provider.Settings")
-        Build = autoclass("android.os.Build")
+        BuildVersion = autoclass("android.os.Build$VERSION")
 
         activity = PythonActivity.mActivity
         pm = activity.getPackageManager()
-        if Build.VERSION.SDK_INT >= 26 and not pm.canRequestPackageInstalls():
+        sdk_int = int(BuildVersion.SDK_INT)
+        if sdk_int >= 26 and not pm.canRequestPackageInstalls():
             self._download_stage = "installer-permission-settings"
             uri = Uri.parse("package:" + PACKAGE_NAME)
             intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, uri)
