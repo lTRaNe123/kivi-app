@@ -1001,9 +1001,9 @@
 
 
 <MobileUpdateScreen>:
-    AppPageLayout:
+    BoxLayout:
         orientation: "vertical"
-        padding: dp(16), dp(20)
+        padding: dp(14), dp(16)
         spacing: dp(10)
         canvas.before:
             Color:
@@ -1014,144 +1014,223 @@
 
         BoxLayout:
             size_hint_y: None
-            height: dp(44)
+            height: dp(52)
             spacing: dp(8)
 
-            SecondaryButton:
+            Button:
                 text: "Назад"
                 size_hint_x: None
                 width: dp(92)
+                font_size: "14sp"
+                background_normal: ""
+                background_down: ""
+                background_color: 1, 1, 1, 1
+                color: 0.05, 0.05, 0.05, 1
                 on_release: root.go_back()
 
-            ScreenSubtitle:
+            Label:
                 text: "Обновление приложения"
+                bold: True
+                font_size: "20sp"
+                color: 0.04, 0.04, 0.04, 1
                 halign: "right"
-                text_size: self.size
-
-        ScreenTitle:
-            text: "ОБНОВЛЕНИЕ"
-
-        ScrollView:
-            do_scroll_x: False
-
-            BoxLayout:
-                orientation: "vertical"
+                valign: "middle"
+                text_size: self.width, self.height
                 size_hint_y: None
-                height: self.minimum_height
-                spacing: dp(10)
+                height: dp(52)
+                shorten: True
+                shorten_from: "right"
 
-                CardBox:
-                    orientation: "vertical"
-                    size_hint_y: None
-                    height: self.minimum_height
+        BoxLayout:
+            orientation: "vertical"
+            size_hint_y: 1
+            padding: dp(2), dp(4), dp(2), dp(4)
+            spacing: dp(8)
 
-                    ScreenSubtitle:
-                        text: "Текущая сборка"
+            Label:
+                text: root.state_text
+                bold: True
+                font_size: "18sp"
+                color: 0.04, 0.04, 0.04, 1
+                halign: "left"
+                valign: "middle"
+                text_size: self.width, self.height
+                size_hint_y: None
+                height: dp(42)
+                shorten: True
+                shorten_from: "right"
 
-                    FinePrint:
-                        text: root.current_version_text
-                        size_hint_y: None
-                        text_size: self.width, None
-                        height: dp(34)
+            Label:
+                text: root.current_version_text
+                font_size: "14sp"
+                color: 0.18, 0.18, 0.18, 1
+                halign: "left"
+                valign: "middle"
+                text_size: self.width, self.height
+                size_hint_y: None
+                height: dp(36)
+                shorten: True
+                shorten_from: "right"
 
-                    FinePrint:
-                        text: root.last_checked_text
-                        size_hint_y: None
-                        text_size: self.width, None
-                        height: dp(30)
+            Label:
+                text: root.last_checked_text
+                font_size: "13sp"
+                color: 0.30, 0.30, 0.30, 1
+                halign: "left"
+                valign: "middle"
+                text_size: self.width, self.height
+                size_hint_y: None
+                height: dp(30)
+                shorten: True
+                shorten_from: "right"
 
-                    FinePrint:
-                        text: root.transport_text
-                        color: 0.70, 0.18, 0.16, 1
-                        size_hint_y: None
-                        text_size: self.width, None
-                        height: dp(42) if self.text else 0
-                        opacity: 1 if self.text else 0
+            Label:
+                text: root.found_version_text
+                font_size: "15sp"
+                color: 0.08, 0.08, 0.08, 1
+                halign: "left"
+                valign: "middle"
+                text_size: self.width, self.height
+                size_hint_y: None
+                height: dp(34)
+                shorten: True
+                shorten_from: "right"
 
-                CardBox:
-                    orientation: "vertical"
-                    size_hint_y: None
-                    height: self.minimum_height
+            Label:
+                text: root.apk_size_text
+                font_size: "13sp"
+                color: 0.25, 0.25, 0.25, 1
+                halign: "left"
+                valign: "middle"
+                text_size: self.width, self.height
+                size_hint_y: None
+                height: dp(30)
+                shorten: True
+                shorten_from: "right"
 
-                    ScreenSubtitle:
-                        text: root.state_text
+            Label:
+                text: root.required_text
+                bold: True
+                font_size: "13sp"
+                color: 0.20, 0.20, 0.20, 1
+                halign: "left"
+                valign: "middle"
+                text_size: self.width, self.height
+                size_hint_y: None
+                height: dp(30)
+                shorten: True
+                shorten_from: "right"
 
-                    FinePrint:
-                        text: root.found_version_text
-                        size_hint_y: None
-                        text_size: self.width, None
-                        height: dp(30)
+            Label:
+                text: root.transport_text
+                font_size: "13sp"
+                color: 0.70, 0.18, 0.16, 1
+                halign: "left"
+                valign: "middle"
+                text_size: self.width, self.height
+                size_hint_y: None
+                height: dp(42)
+                max_lines: 2
+                shorten: True
+                shorten_from: "right"
 
-                    FinePrint:
-                        text: root.apk_size_text
-                        size_hint_y: None
-                        text_size: self.width, None
-                        height: dp(30) if self.text else 0
-                        opacity: 1 if self.text else 0
+            Label:
+                text: root.release_notes_text
+                font_size: "13sp"
+                color: 0.25, 0.25, 0.25, 1
+                halign: "left"
+                valign: "top"
+                text_size: self.width, self.height
+                size_hint_y: None
+                height: dp(74)
+                max_lines: 3
+                shorten: True
+                shorten_from: "right"
 
-                    FinePrint:
-                        text: root.required_text
-                        bold: True
-                        size_hint_y: None
-                        text_size: self.width, None
-                        height: dp(30) if self.text else 0
-                        opacity: 1 if self.text else 0
+            ProgressBar:
+                max: 100
+                value: root.progress_value
+                size_hint_y: None
+                height: dp(12)
 
-                    FinePrint:
-                        text: root.release_notes_text
-                        valign: "top"
-                        size_hint_y: None
-                        text_size: self.width, None
-                        height: max(dp(70), self.texture_size[1] + dp(12)) if self.text else 0
-                        opacity: 1 if self.text else 0
+            Label:
+                text: root.progress_text
+                bold: True
+                font_size: "14sp"
+                color: 0.05, 0.05, 0.05, 1
+                halign: "left"
+                valign: "middle"
+                text_size: self.width, self.height
+                size_hint_y: None
+                height: dp(28)
+                shorten: True
+                shorten_from: "right"
 
-                CardBox:
-                    orientation: "vertical"
-                    size_hint_y: None
-                    height: self.minimum_height
+            Label:
+                text: root.install_text
+                font_size: "13sp"
+                color: 0.25, 0.25, 0.25, 1
+                halign: "left"
+                valign: "middle"
+                text_size: self.width, self.height
+                size_hint_y: None
+                height: dp(44)
+                max_lines: 2
+                shorten: True
+                shorten_from: "right"
 
-                    FinePrint:
-                        text: root.progress_text
-                        bold: True
-                        size_hint_y: None
-                        text_size: self.width, None
-                        height: dp(28)
-                        opacity: 1
+            Label:
+                text: root.status_text
+                font_size: "13sp"
+                color: 0.72, 0.08, 0.08, 1
+                halign: "left"
+                valign: "top"
+                text_size: self.width, self.height
+                size_hint_y: None
+                height: dp(54)
+                max_lines: 2
+                shorten: True
+                shorten_from: "right"
 
-                    FinePrint:
-                        text: root.install_text
-                        size_hint_y: None
-                        text_size: self.width, None
-                        height: dp(44)
-
-                    FinePrint:
-                        text: root.status_text
-                        color: 0.72, 0.08, 0.08, 1
-                        valign: "top"
-                        size_hint_y: None
-                        text_size: self.width, None
-                        height: max(dp(44), self.texture_size[1] + dp(12)) if self.text else 0
-                        opacity: 1 if self.text else 0
+            Widget:
 
         BoxLayout:
             orientation: "vertical"
             size_hint_y: None
-            height: self.minimum_height
+            height: dp(204)
             spacing: dp(8)
 
-            PrimaryButton:
+            Button:
                 text: "Проверить обновления" if not root.busy else "Проверяем..."
                 disabled: root.busy
+                size_hint_y: None
+                height: dp(44)
+                background_normal: ""
+                background_down: ""
+                background_color: 0.05, 0.05, 0.05, 1
+                color: 1, 1, 1, 1
                 on_release: root.check_update()
 
-            PrimaryButton:
+            Button:
                 text: "Скачать обновление"
                 disabled: not root.can_download or root.busy
+                size_hint_y: None
+                height: dp(44)
+                background_normal: ""
+                background_down: ""
+                background_color: 0.05, 0.05, 0.05, 1
+                color: 1, 1, 1, 1
                 on_release: root.download_update()
 
-            PrimaryButton:
+            Button:
                 text: "Установить"
                 disabled: not root.can_install or root.busy
+                size_hint_y: None
+                height: dp(44)
+                background_normal: ""
+                background_down: ""
+                background_color: 0.05, 0.05, 0.05, 1
+                color: 1, 1, 1, 1
                 on_release: root.install_update()
 
             BoxLayout:
@@ -1159,14 +1238,22 @@
                 height: dp(44)
                 spacing: dp(8)
 
-                SecondaryButton:
+                Button:
                     text: "Повторить"
                     disabled: root.busy
+                    background_normal: ""
+                    background_down: ""
+                    background_color: 1, 1, 1, 1
+                    color: 0.05, 0.05, 0.05, 1
                     on_release: root.check_update()
 
-                SecondaryButton:
+                Button:
                     text: "Позже"
                     disabled: not root.can_later
+                    background_normal: ""
+                    background_down: ""
+                    background_color: 1, 1, 1, 1
+                    color: 0.05, 0.05, 0.05, 1
                     on_release: root.go_back()
 
 

@@ -3640,6 +3640,7 @@ class MobileUpdateScreen(Screen):
     install_text = StringProperty("")
     status_text = StringProperty("")
     progress_text = StringProperty("")
+    progress_value = NumericProperty(0)
     can_download = BooleanProperty(False)
     can_install = BooleanProperty(False)
     can_later = BooleanProperty(True)
@@ -3660,6 +3661,8 @@ class MobileUpdateScreen(Screen):
         self._last_logged_mb = -1
         self._logged_first_mb = False
         self._progress_trigger = Clock.create_trigger(self._flush_download_progress, 0.2)
+        self._idle_probe_events = []
+        self._idle_probe_start_rss = None
 
     def on_pre_enter(self, *args):
         self.current_version_text = (
@@ -3671,8 +3674,12 @@ class MobileUpdateScreen(Screen):
             if kivy_platform != "android"
             else "После проверки APK откроется системный установщик Android"
         )
+        if UPDATE_CHANNEL == "TEST":
+            Clock.schedule_once(self._log_update_screen_widget_tree, 0)
+            self._start_update_idle_probe()
 
     def on_leave(self, *args):
+        self._cancel_update_idle_probe()
         if self._download_in_progress:
             self.cancel_download()
 
@@ -3779,6 +3786,7 @@ class MobileUpdateScreen(Screen):
         self.can_install = False
         self.state_text = "Загружаем 0%"
         self.progress_text = "0%"
+        self.progress_value = 0
         self.status_text = ""
         self._reset_download_progress_state()
         self._log_download_memory("before-download", 0, 0)
@@ -3955,6 +3963,7 @@ class MobileUpdateScreen(Screen):
         self.state_text = "Ошибка проверки" if "SHA256" in str(exc) else "Ошибка загрузки"
         self.status_text = str(exc)
         self.progress_text = ""
+        self.progress_value = 0
         if self._progress_trigger is not None:
             self._progress_trigger.cancel()
         self._cleanup_part_file()
@@ -3967,6 +3976,7 @@ class MobileUpdateScreen(Screen):
         self.state_text = "Готово к установке"
         self.status_text = "Файл скачан и проверен"
         self.progress_text = "100%"
+        self.progress_value = 100
         self.can_download = False
         self.can_install = True
         if self._progress_trigger is not None:
@@ -4035,9 +4045,84 @@ class MobileUpdateScreen(Screen):
     def _set_progress(self, percent):
         self.state_text = f"Загружаем {percent}%"
         self.progress_text = f"{percent}%"
+        self.progress_value = percent
 
     def _set_state(self, text):
         Clock.schedule_once(lambda dt, text=text: setattr(self, "state_text", text))
+
+    def _iter_widget_classes(self, widget):
+        yield widget.__class__.__name__
+        for child in getattr(widget, "children", []):
+            yield from self._iter_widget_classes(child)
+
+    def _log_update_screen_widget_tree(self, *_):
+        if UPDATE_CHANNEL != "TEST":
+            return
+        counts = defaultdict(int)
+        for class_name in self._iter_widget_classes(self):
+            counts[class_name] += 1
+        forbidden = [
+            name for name in ("FinePrint", "CardBox", "AdaptiveCard", "ScrollView")
+            if counts.get(name)
+        ]
+        summary = ", ".join(f"{name}:{counts[name]}" for name in sorted(counts))
+        Logger.info(
+            "MobileUpdate: widget-classes "
+            f"forbidden={forbidden or 'none'} classes={summary}"
+        )
+
+    def _start_update_idle_probe(self):
+        self._cancel_update_idle_probe()
+        self._idle_probe_start_rss = None
+        for seconds in range(0, 61, 10):
+            event = Clock.schedule_once(
+                lambda dt, seconds=seconds: self._log_update_idle_sample(seconds),
+                seconds,
+            )
+            self._idle_probe_events.append(event)
+
+    def _cancel_update_idle_probe(self):
+        for event in self._idle_probe_events:
+            event.cancel()
+        self._idle_probe_events = []
+
+    def _read_proc_memory(self):
+        rss = ""
+        vm_size = ""
+        try:
+            with open("/proc/self/status", "r", encoding="utf-8") as fh:
+                for line in fh:
+                    if line.startswith("VmRSS:"):
+                        rss = line.split(":", 1)[1].strip()
+                    elif line.startswith("VmSize:"):
+                        vm_size = line.split(":", 1)[1].strip()
+                    if rss and vm_size:
+                        break
+        except OSError:
+            return "", "", None
+        rss_kb = None
+        if rss:
+            try:
+                rss_kb = int(rss.split()[0])
+            except (ValueError, IndexError):
+                rss_kb = None
+        return rss, vm_size, rss_kb
+
+    def _log_update_idle_sample(self, seconds):
+        if UPDATE_CHANNEL != "TEST":
+            return
+        rss, vm_size, rss_kb = self._read_proc_memory()
+        if not rss:
+            return
+        if self._idle_probe_start_rss is None:
+            self._idle_probe_start_rss = rss_kb
+        delta = ""
+        if rss_kb is not None and self._idle_probe_start_rss is not None:
+            delta = f" delta_rss_kb={rss_kb - self._idle_probe_start_rss}"
+        Logger.info(
+            f"MobileUpdate: idle-probe seconds={seconds} "
+            f"VmRSS={rss} VmSize={vm_size}{delta}"
+        )
 
     def _log_download_memory(self, label, downloaded, percent):
         if UPDATE_CHANNEL != "TEST":
@@ -4053,18 +4138,8 @@ class MobileUpdateScreen(Screen):
         if not should_log:
             return
         self._last_logged_mb = mb
-        rss = ""
-        vm_size = ""
-        try:
-            with open("/proc/self/status", "r", encoding="utf-8") as fh:
-                for line in fh:
-                    if line.startswith("VmRSS:"):
-                        rss = line.split(":", 1)[1].strip()
-                    elif line.startswith("VmSize:"):
-                        vm_size = line.split(":", 1)[1].strip()
-                    if rss and vm_size:
-                        break
-        except OSError:
+        rss, vm_size, _ = self._read_proc_memory()
+        if not rss:
             return
         with self._progress_lock:
             ui_updates = self._progress_ui_updates
