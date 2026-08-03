@@ -5,8 +5,11 @@ import hashlib
 
 from android_apk_metadata import (
     ApkMetadataValidationError,
+    archive_package_info_signature_flags,
+    installed_package_info_signature_flags,
     package_info_signature_flags,
     package_signature_fingerprints,
+    package_signature_fingerprints_with_source,
     validate_apk_metadata,
 )
 
@@ -51,6 +54,16 @@ class FakeSignature:
 
     def toByteArray(self):
         return self._der_bytes
+
+
+class FakeAndroid10ArchivePackageManager:
+    def getPackageArchiveInfo(self, _path, flags):
+        combined = FakePackageManager.GET_SIGNATURES | FakePackageManager.GET_SIGNING_CERTIFICATES
+        if flags == FakePackageManager.GET_SIGNING_CERTIFICATES:
+            return FakePackageInfo(signing_info=None, signatures=None)
+        if flags == combined:
+            return FakePackageInfo(signing_info=None, signatures=[FakeSignature(b"archive-cert")])
+        return FakePackageInfo(signing_info=None, signatures=None)
 
 
 class AndroidApkMetadataTests(unittest.TestCase):
@@ -158,6 +171,14 @@ class AndroidApkMetadataTests(unittest.TestCase):
             package_info_signature_flags(FakePackageManager, 27),
             FakePackageManager.GET_SIGNATURES,
         )
+        self.assertEqual(
+            archive_package_info_signature_flags(FakePackageManager, 27),
+            FakePackageManager.GET_SIGNATURES,
+        )
+        self.assertEqual(
+            installed_package_info_signature_flags(FakePackageManager, 27),
+            FakePackageManager.GET_SIGNATURES,
+        )
 
     def test_api_28_plus_uses_get_signing_certificates_flag(self):
         self.assertEqual(
@@ -169,29 +190,60 @@ class AndroidApkMetadataTests(unittest.TestCase):
             FakePackageManager.GET_SIGNING_CERTIFICATES,
         )
 
-    def test_main_gets_downloaded_archive_with_signature_flag(self):
+    def test_api_29_archive_uses_combined_signature_flags(self):
+        self.assertEqual(
+            archive_package_info_signature_flags(FakePackageManager, 29),
+            FakePackageManager.GET_SIGNATURES | FakePackageManager.GET_SIGNING_CERTIFICATES,
+        )
+
+    def test_api_29_installed_uses_get_signing_certificates_flag(self):
+        self.assertEqual(
+            installed_package_info_signature_flags(FakePackageManager, 29),
+            FakePackageManager.GET_SIGNING_CERTIFICATES,
+        )
+
+    def test_api_29_archive_with_only_get_signing_certificates_reproduces_missing_signing_info(self):
+        pm = FakeAndroid10ArchivePackageManager()
+        info = pm.getPackageArchiveInfo("vosk.apk", FakePackageManager.GET_SIGNING_CERTIFICATES)
+        self.assertIsNone(info.signingInfo)
+        self.assertIsNone(info.signatures)
+        with self.assertRaises(ApkMetadataValidationError):
+            package_signature_fingerprints(info, sdk_int=29, source_label="downloaded")
+
+    def test_api_29_archive_with_combined_flags_gets_signatures_fallback(self):
+        pm = FakeAndroid10ArchivePackageManager()
+        flags = archive_package_info_signature_flags(FakePackageManager, 29)
+        info = pm.getPackageArchiveInfo("vosk.apk", flags)
+        fingerprints, source = package_signature_fingerprints_with_source(
+            info,
+            sdk_int=29,
+            source_label="downloaded",
+        )
+        self.assertEqual(source, "signatures")
+        self.assertEqual(fingerprints, {hashlib.sha256(b"archive-cert").hexdigest()})
+
+    def test_main_gets_downloaded_archive_with_archive_flags(self):
         main_py = (ROOT / "main.py").read_text(encoding="utf-8")
-        self.assertIn("archive = pm.getPackageArchiveInfo(path, flags)", main_py)
+        self.assertIn("archive = pm.getPackageArchiveInfo(path, archive_flags)", main_py)
         self.assertNotIn("getPackageArchiveInfo(path, 0)", main_py)
 
-    def test_main_gets_installed_package_with_signature_flag(self):
+    def test_main_gets_installed_package_with_installed_flags(self):
         main_py = (ROOT / "main.py").read_text(encoding="utf-8")
-        self.assertIn("installed = pm.getPackageInfo(PACKAGE_NAME, flags)", main_py)
+        self.assertIn("installed = pm.getPackageInfo(PACKAGE_NAME, installed_flags)", main_py)
 
-    def test_signing_info_none_is_apk_validation_error(self):
-        with self.assertRaises(ApkMetadataValidationError) as ctx:
-            package_signature_fingerprints(
-                FakePackageInfo(signing_info=None),
-                sdk_int=33,
-                source_label="downloaded",
-            )
-        self.assertEqual(ctx.exception.label, "apk-validation-error")
-        self.assertEqual(ctx.exception.stage, "android-signature-check")
+    def test_signing_info_none_with_signatures_fallback_passes(self):
+        fingerprints, source = package_signature_fingerprints_with_source(
+            FakePackageInfo(signing_info=None, signatures=[FakeSignature(b"legacy-cert")]),
+            sdk_int=33,
+            source_label="downloaded",
+        )
+        self.assertEqual(source, "signatures")
+        self.assertEqual(fingerprints, {hashlib.sha256(b"legacy-cert").hexdigest()})
 
     def test_get_apk_contents_signers_none_is_apk_validation_error(self):
         with self.assertRaises(ApkMetadataValidationError) as ctx:
             package_signature_fingerprints(
-                FakePackageInfo(signing_info=FakeSigningInfo(None)),
+                FakePackageInfo(signing_info=FakeSigningInfo(None), signatures=None),
                 sdk_int=33,
                 source_label="downloaded",
             )
@@ -201,7 +253,7 @@ class AndroidApkMetadataTests(unittest.TestCase):
     def test_empty_signature_array_is_apk_validation_error(self):
         with self.assertRaises(ApkMetadataValidationError) as ctx:
             package_signature_fingerprints(
-                FakePackageInfo(signing_info=FakeSigningInfo([])),
+                FakePackageInfo(signing_info=FakeSigningInfo([]), signatures=[]),
                 sdk_int=33,
                 source_label="downloaded",
             )

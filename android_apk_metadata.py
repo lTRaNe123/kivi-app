@@ -42,10 +42,20 @@ def validate_apk_metadata(package_info, *, expected_package, expected_version_co
     return archive_code
 
 
-def package_info_signature_flags(package_manager, sdk_int):
+def archive_package_info_signature_flags(package_manager, sdk_int):
     if int(sdk_int) >= 28:
-        return package_manager.GET_SIGNING_CERTIFICATES
-    return package_manager.GET_SIGNATURES
+        return int(package_manager.GET_SIGNATURES | package_manager.GET_SIGNING_CERTIFICATES)
+    return int(package_manager.GET_SIGNATURES)
+
+
+def installed_package_info_signature_flags(package_manager, sdk_int):
+    if int(sdk_int) >= 28:
+        return int(package_manager.GET_SIGNING_CERTIFICATES)
+    return int(package_manager.GET_SIGNATURES)
+
+
+def package_info_signature_flags(package_manager, sdk_int):
+    return installed_package_info_signature_flags(package_manager, sdk_int)
 
 
 def _java_bytes_to_bytes(raw):
@@ -68,7 +78,35 @@ def signature_sha256_hex(signature):
     return hashlib.sha256(raw).hexdigest()
 
 
-def package_signature_objects(package_info, *, sdk_int, source_label):
+def _as_non_empty_list(signatures):
+    if signatures is None:
+        return []
+    signatures = list(signatures)
+    return signatures
+
+
+def _signing_info_signature_objects(signing_info):
+    if signing_info is None:
+        return []
+
+    try:
+        has_multiple = bool(signing_info.hasMultipleSigners())
+    except Exception:
+        has_multiple = False
+    if has_multiple:
+        return _as_non_empty_list(signing_info.getApkContentsSigners())
+
+    try:
+        history = _as_non_empty_list(signing_info.getSigningCertificateHistory())
+    except Exception:
+        history = []
+    if history:
+        return history
+
+    return _as_non_empty_list(signing_info.getApkContentsSigners())
+
+
+def package_signature_objects_with_source(package_info, *, sdk_int, source_label):
     if package_info is None:
         raise ApkMetadataValidationError(
             f"Android не вернул PackageInfo для {source_label} APK",
@@ -77,37 +115,45 @@ def package_signature_objects(package_info, *, sdk_int, source_label):
 
     if int(sdk_int) >= 28:
         signing_info = getattr(package_info, "signingInfo", None)
-        if signing_info is None:
-            raise ApkMetadataValidationError(
-                f"Android не вернул signingInfo для {source_label} APK",
-                stage="android-signature-check",
-            )
-        signatures = signing_info.getApkContentsSigners()
-    else:
-        signatures = getattr(package_info, "signatures", None)
+        signatures = _signing_info_signature_objects(signing_info)
+        if signatures:
+            return signatures, "signingInfo"
 
-    if signatures is None:
-        raise ApkMetadataValidationError(
-            f"Android вернул пустой массив подписей для {source_label} APK",
-            stage="android-signature-check",
-        )
+    signatures = _as_non_empty_list(getattr(package_info, "signatures", None))
+    if signatures:
+        return signatures, "signatures"
 
-    signatures = list(signatures)
-    if not signatures:
-        raise ApkMetadataValidationError(
-            f"Android вернул 0 сертификатов подписи для {source_label} APK",
-            stage="android-signature-check",
-        )
-    return signatures
+    raise ApkMetadataValidationError(
+        f"Android не вернул сертификаты подписи для {source_label} APK",
+        stage="android-signature-check",
+    )
 
 
-def package_signature_fingerprints(package_info, *, sdk_int, source_label):
-    signatures = package_signature_objects(
+def package_signature_objects(package_info, *, sdk_int, source_label):
+    signatures, _source = package_signature_objects_with_source(
         package_info,
         sdk_int=sdk_int,
         source_label=source_label,
     )
-    return {signature_sha256_hex(signature) for signature in signatures}
+    return signatures
+
+
+def package_signature_fingerprints_with_source(package_info, *, sdk_int, source_label):
+    signatures, source = package_signature_objects_with_source(
+        package_info,
+        sdk_int=sdk_int,
+        source_label=source_label,
+    )
+    return {signature_sha256_hex(signature) for signature in signatures}, source
+
+
+def package_signature_fingerprints(package_info, *, sdk_int, source_label):
+    fingerprints, _source = package_signature_fingerprints_with_source(
+        package_info,
+        sdk_int=sdk_int,
+        source_label=source_label,
+    )
+    return fingerprints
 
 
 def package_signing_info_exists(package_info, sdk_int):
@@ -116,3 +162,8 @@ def package_signing_info_exists(package_info, sdk_int):
     if int(sdk_int) >= 28:
         return getattr(package_info, "signingInfo", None) is not None
     return getattr(package_info, "signatures", None) is not None
+
+
+def package_legacy_signatures_exists(package_info):
+    signatures = getattr(package_info, "signatures", None) if package_info is not None else None
+    return bool(_as_non_empty_list(signatures))

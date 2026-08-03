@@ -51,8 +51,10 @@ from kivy.utils import platform as kivy_platform
 from api_client import api_client, ApiError
 from android_apk_metadata import (
     ApkMetadataValidationError,
-    package_info_signature_flags,
-    package_signature_fingerprints,
+    archive_package_info_signature_flags,
+    installed_package_info_signature_flags,
+    package_legacy_signatures_exists,
+    package_signature_fingerprints_with_source,
     package_signing_info_exists,
     validate_apk_metadata,
 )
@@ -3920,8 +3922,9 @@ class MobileUpdateScreen(Screen):
         activity = PythonActivity.mActivity
         pm = activity.getPackageManager()
         sdk_int = int(BuildVersion.SDK_INT)
-        flags = package_info_signature_flags(PackageManager, sdk_int)
-        archive = pm.getPackageArchiveInfo(path, flags)
+        archive_flags = archive_package_info_signature_flags(PackageManager, sdk_int)
+        installed_flags = installed_package_info_signature_flags(PackageManager, sdk_int)
+        archive = pm.getPackageArchiveInfo(path, archive_flags)
         try:
             validate_apk_metadata(
                 archive,
@@ -3934,14 +3937,16 @@ class MobileUpdateScreen(Screen):
             self._download_stage = exc.stage
             raise UpdatePipelineError(str(exc), label=exc.label, stage=exc.stage) from exc
         self._download_stage = "android-signature-check"
-        installed = pm.getPackageInfo(PACKAGE_NAME, flags)
+        installed = pm.getPackageInfo(PACKAGE_NAME, installed_flags)
+        installed_source = ""
+        downloaded_source = ""
         try:
-            installed_certs = package_signature_fingerprints(
+            installed_certs, installed_source = package_signature_fingerprints_with_source(
                 installed,
                 sdk_int=sdk_int,
                 source_label="installed",
             )
-            downloaded_certs = package_signature_fingerprints(
+            downloaded_certs, downloaded_source = package_signature_fingerprints_with_source(
                 archive,
                 sdk_int=sdk_int,
                 source_label="downloaded",
@@ -3949,21 +3954,27 @@ class MobileUpdateScreen(Screen):
         except ApkMetadataValidationError as exc:
             self._log_android_signature_audit(
                 sdk_int=sdk_int,
-                flags=flags,
+                archive_flags=archive_flags,
+                installed_flags=installed_flags,
                 installed=installed,
                 downloaded=archive,
                 installed_certs=set(),
                 downloaded_certs=set(),
+                installed_source=installed_source,
+                downloaded_source=downloaded_source,
             )
             raise UpdatePipelineError(str(exc), label=exc.label, stage=exc.stage) from exc
 
         self._log_android_signature_audit(
             sdk_int=sdk_int,
-            flags=flags,
+            archive_flags=archive_flags,
+            installed_flags=installed_flags,
             installed=installed,
             downloaded=archive,
             installed_certs=installed_certs,
             downloaded_certs=downloaded_certs,
+            installed_source=installed_source,
+            downloaded_source=downloaded_source,
         )
         if installed_certs != downloaded_certs:
             raise UpdatePipelineError("Обновление подписано другим ключом", label="apk-validation-error", stage=self._download_stage)
@@ -3972,20 +3983,28 @@ class MobileUpdateScreen(Screen):
         self,
         *,
         sdk_int,
-        flags,
+        archive_flags,
+        installed_flags,
         installed,
         downloaded,
         installed_certs,
         downloaded_certs,
+        installed_source,
+        downloaded_source,
     ):
         Logger.info(
             "MobileUpdate: android-signature-check "
             f"sdk_int={sdk_int} "
-            f"pm_flag={flags} "
+            f"archive_flags={archive_flags} "
+            f"installed_flags={installed_flags} "
             f"downloaded_info_exists={downloaded is not None} "
             f"installed_info_exists={installed is not None} "
             f"downloaded_signing_info_exists={package_signing_info_exists(downloaded, sdk_int)} "
             f"installed_signing_info_exists={package_signing_info_exists(installed, sdk_int)} "
+            f"downloaded_legacy_signatures_exists={package_legacy_signatures_exists(downloaded)} "
+            f"installed_legacy_signatures_exists={package_legacy_signatures_exists(installed)} "
+            f"downloaded_cert_source={downloaded_source or 'none'} "
+            f"installed_cert_source={installed_source or 'none'} "
             f"downloaded_cert_count={len(downloaded_certs)} "
             f"installed_cert_count={len(installed_certs)} "
             f"downloaded_cert_sha256={sorted(downloaded_certs)} "
