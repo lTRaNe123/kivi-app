@@ -49,7 +49,13 @@ from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.utils import platform as kivy_platform
 
 from api_client import api_client, ApiError
-from android_apk_metadata import ApkMetadataValidationError, validate_apk_metadata
+from android_apk_metadata import (
+    ApkMetadataValidationError,
+    package_info_signature_flags,
+    package_signature_fingerprints,
+    package_signing_info_exists,
+    validate_apk_metadata,
+)
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME, PACKAGE_NAME, UPDATE_CHANNEL
 from mobile_update_downloader import (
     DownloadCancelled,
@@ -3914,7 +3920,8 @@ class MobileUpdateScreen(Screen):
         activity = PythonActivity.mActivity
         pm = activity.getPackageManager()
         sdk_int = int(BuildVersion.SDK_INT)
-        archive = pm.getPackageArchiveInfo(path, 0)
+        flags = package_info_signature_flags(PackageManager, sdk_int)
+        archive = pm.getPackageArchiveInfo(path, flags)
         try:
             validate_apk_metadata(
                 archive,
@@ -3927,26 +3934,63 @@ class MobileUpdateScreen(Screen):
             self._download_stage = exc.stage
             raise UpdatePipelineError(str(exc), label=exc.label, stage=exc.stage) from exc
         self._download_stage = "android-signature-check"
-        flags = PackageManager.GET_SIGNING_CERTIFICATES if sdk_int >= 28 else PackageManager.GET_SIGNATURES
         installed = pm.getPackageInfo(PACKAGE_NAME, flags)
-        signed_archive = pm.getPackageArchiveInfo(path, flags)
-        if signed_archive is None:
-            raise UpdatePipelineError("Android не распознал подпись APK", label="apk-validation-error", stage=self._download_stage)
-        if not self._android_signatures_match(installed, signed_archive, sdk_int):
+        try:
+            installed_certs = package_signature_fingerprints(
+                installed,
+                sdk_int=sdk_int,
+                source_label="installed",
+            )
+            downloaded_certs = package_signature_fingerprints(
+                archive,
+                sdk_int=sdk_int,
+                source_label="downloaded",
+            )
+        except ApkMetadataValidationError as exc:
+            self._log_android_signature_audit(
+                sdk_int=sdk_int,
+                flags=flags,
+                installed=installed,
+                downloaded=archive,
+                installed_certs=set(),
+                downloaded_certs=set(),
+            )
+            raise UpdatePipelineError(str(exc), label=exc.label, stage=exc.stage) from exc
+
+        self._log_android_signature_audit(
+            sdk_int=sdk_int,
+            flags=flags,
+            installed=installed,
+            downloaded=archive,
+            installed_certs=installed_certs,
+            downloaded_certs=downloaded_certs,
+        )
+        if installed_certs != downloaded_certs:
             raise UpdatePipelineError("Обновление подписано другим ключом", label="apk-validation-error", stage=self._download_stage)
 
-    def _android_signatures_match(self, installed, archive, sdk_int):
-        if sdk_int >= 28:
-            left = installed.signingInfo.getApkContentsSigners()
-            right = archive.signingInfo.getApkContentsSigners()
-        else:
-            left = installed.signatures
-            right = archive.signatures
-        if len(left) != len(right):
-            return False
-        left_values = sorted([sig.toCharsString() for sig in left])
-        right_values = sorted([sig.toCharsString() for sig in right])
-        return left_values == right_values
+    def _log_android_signature_audit(
+        self,
+        *,
+        sdk_int,
+        flags,
+        installed,
+        downloaded,
+        installed_certs,
+        downloaded_certs,
+    ):
+        Logger.info(
+            "MobileUpdate: android-signature-check "
+            f"sdk_int={sdk_int} "
+            f"pm_flag={flags} "
+            f"downloaded_info_exists={downloaded is not None} "
+            f"installed_info_exists={installed is not None} "
+            f"downloaded_signing_info_exists={package_signing_info_exists(downloaded, sdk_int)} "
+            f"installed_signing_info_exists={package_signing_info_exists(installed, sdk_int)} "
+            f"downloaded_cert_count={len(downloaded_certs)} "
+            f"installed_cert_count={len(installed_certs)} "
+            f"downloaded_cert_sha256={sorted(downloaded_certs)} "
+            f"installed_cert_sha256={sorted(installed_certs)}"
+        )
 
     def install_update(self):
         if kivy_platform != "android":
@@ -4107,7 +4151,17 @@ class MobileUpdateScreen(Screen):
         Clock.schedule_once(lambda dt, text=text: setattr(self, "state_text", text))
 
     def _classify_update_error(self, exc):
-        return getattr(exc, "label", "download-error")
+        label = getattr(exc, "label", "")
+        if label:
+            return label
+        if self._download_stage in {
+            "android-package-info",
+            "android-package-name",
+            "android-version-code",
+            "android-signature-check",
+        }:
+            return "apk-validation-error"
+        return "download-error"
 
     def _expected_update_paths(self, info):
         version_code = int((info or {}).get("version_code") or 0)
