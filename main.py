@@ -65,6 +65,7 @@ from android_fileprovider_paths import (
     validate_update_apk_provider_path,
 )
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME, PACKAGE_NAME, UPDATE_CHANNEL
+from icon_assets import category_icon_path
 from mobile_update_downloader import (
     DownloadCancelled,
     DownloadVerificationError,
@@ -252,6 +253,7 @@ class NavListRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
     title = StringProperty("")
     subtitle = StringProperty("")
     icon_text = StringProperty("")
+    icon_source = StringProperty("")
     action = StringProperty("")
     payload = ObjectProperty({})
 
@@ -260,6 +262,7 @@ class NavListRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
         self.title = data.get("title") or ""
         self.subtitle = data.get("subtitle") or ""
         self.icon_text = data.get("icon_text") or ""
+        self.icon_source = data.get("icon_source") or ""
         self.action = data.get("action") or ""
         self.payload = data.get("payload") or {}
         return result
@@ -1386,18 +1389,22 @@ class VoentorgScreen(Screen):
                 return
 
             def ui_ok(dt, sections=sections):
-                icons = {
-                    "orders": "З",
-                    "form": "Ф",
-                    "uniform": "Ф",
-                    "equipment": "С",
-                    "chevrons": "Ш",
+                section_icons = {
+                    "orders": "my_orders",
+                    "form": "uniform",
+                    "uniform": "uniform",
+                    "equipment": "gear",
+                    "gear": "gear",
+                    "chevrons": "chevrons",
                 }
                 self.ids.voentorg_list.data = [
                     {
                         "title": section.get("title") or "",
                         "subtitle": section.get("subtitle") or "",
-                        "icon_text": icons.get(section.get("code") or "", "В"),
+                        "icon_text": "",
+                        "icon_source": category_icon_path(
+                            section_icons.get(section.get("code") or "", "")
+                        ),
                         "action": section.get("code") or "",
                         "payload": section,
                     }
@@ -1829,7 +1836,8 @@ class ChevronOrderScreen(Screen):
                     {
                         "title": kit.get("title") or "",
                         "subtitle": kit.get("subtitle") or "",
-                        "icon_text": "Ш",
+                        "icon_text": "",
+                        "icon_source": category_icon_path("chevrons"),
                         "action": "kit",
                         "payload": kit,
                     }
