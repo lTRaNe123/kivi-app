@@ -58,6 +58,12 @@ from android_apk_metadata import (
     package_signing_info_exists,
     validate_apk_metadata,
 )
+from android_fileprovider_paths import (
+    PROVIDER_PATHS_RESOURCE,
+    FileProviderPathError,
+    provider_authority,
+    validate_update_apk_provider_path,
+)
 from app_version import APP_VERSION_CODE, APP_VERSION_NAME, PACKAGE_NAME, UPDATE_CHANNEL
 from mobile_update_downloader import (
     DownloadCancelled,
@@ -4058,14 +4064,50 @@ class MobileUpdateScreen(Screen):
                 stage=self._download_stage,
             )
 
-        apk_file = File(path)
         self._download_stage = "installer-fileprovider-uri"
-        content_uri = FileProvider.getUriForFile(activity, PACKAGE_NAME + ".fileprovider", apk_file)
+        app = App.get_running_app()
+        user_data_dir = app.user_data_dir if app else os.getcwd()
+        provider_authority_text = provider_authority(PACKAGE_NAME)
+        try:
+            provider_path_info = validate_update_apk_provider_path(
+                path,
+                user_data_dir=user_data_dir,
+            )
+        except FileProviderPathError as exc:
+            raise UpdatePipelineError(
+                str(exc),
+                label="installer-launch-error",
+                stage=self._download_stage,
+            ) from exc
+
+        apk_file = File(path)
+        content_uri = FileProvider.getUriForFile(activity, provider_authority_text, apk_file)
+        content_uri_text = str(content_uri.toString())
+        if not content_uri_text.startswith("content://"):
+            raise UpdatePipelineError(
+                "FileProvider вернул некорректный URI для APK",
+                label="installer-launch-error",
+                stage=self._download_stage,
+            )
+
         self._download_stage = "installer-action-view-intent"
         intent = Intent(Intent.ACTION_VIEW)
         intent.setDataAndType(content_uri, "application/vnd.android.package-archive")
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        installer_flags = int(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK)
+        Logger.info(
+            "MobileUpdate: installer-fileprovider "
+            f"provider_authority={provider_authority_text} "
+            f"provider_paths_resource={PROVIDER_PATHS_RESOURCE} "
+            f"apk_path={path} "
+            f"apk_canonical_path={provider_path_info['apk_canonical_path']} "
+            f"expected_provider_root={provider_path_info['expected_provider_root']} "
+            f"expected_provider_root_canonical={provider_path_info['expected_provider_root_canonical']} "
+            f"path_inside_provider_root={provider_path_info['path_inside_provider_root']} "
+            f"generated_content_uri={content_uri_text} "
+            f"installer_intent_flags={installer_flags}"
+        )
         self._download_stage = "installer-start-activity"
         activity.startActivity(intent)
 
