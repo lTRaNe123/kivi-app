@@ -194,14 +194,18 @@
             font_size: "15sp"
             halign: "left"
             valign: "bottom"
-            text_size: self.size
+            shorten: True
+            shorten_from: "right"
+            text_size: self.width, None
         Label:
             text: root.subtitle
             color: 0.38, 0.38, 0.38, 1
             font_size: "12sp"
             halign: "left"
             valign: "top"
-            text_size: self.size
+            shorten: True
+            shorten_from: "right"
+            text_size: self.width, None
     Image:
         source: icon_path("chevron_right")
         size_hint: None, None
@@ -262,13 +266,18 @@
     color: 0.25, 0.25, 0.25, 1
     font_size: "13sp"
     halign: "left"
-    valign: "middle"
-    text_size: self.size
+    valign: "top"
+    text_size: self.width, None
+    size_hint_y: None
+    height: self.texture_size[1]
 
 
 <CardBox@BoxLayout>:
+    orientation: "vertical"
     padding: dp(16)
     spacing: dp(10)
+    size_hint_y: None
+    height: self.minimum_height
     canvas.before:
         Color:
             rgba: 1, 1, 1, 1
@@ -465,7 +474,9 @@
             font_size: "16sp"
             halign: "left"
             valign: "bottom"
-            text_size: self.size
+            shorten: True
+            shorten_from: "right"
+            text_size: self.width, None
 
         Label:
             text: root.subtitle
@@ -473,7 +484,9 @@
             font_size: "13sp"
             halign: "left"
             valign: "top"
-            text_size: self.size
+            shorten: True
+            shorten_from: "right"
+            text_size: self.width, None
 
     Image:
         source: icon_path("chevron_right")
@@ -550,7 +563,9 @@
             font_size: "16sp"
             halign: "left"
             valign: "bottom"
-            text_size: self.size
+            shorten: True
+            shorten_from: "right"
+            text_size: self.width, None
 
         Label:
             text: root.meta
@@ -558,7 +573,9 @@
             font_size: "13sp"
             halign: "left"
             valign: "top"
-            text_size: self.size
+            text_size: self.width, None
+            size_hint_y: None
+            height: self.texture_size[1]
 
 
 <ChevronOptionRow>:
@@ -739,7 +756,7 @@
 
         BoxLayout:
             size_hint_y: None
-            height: max(dp(32), order_number_label.texture_size[1] + dp(4))
+            height: dp(32)
             spacing: dp(8)
 
             Label:
@@ -751,6 +768,8 @@
                 halign: "left"
                 valign: "middle"
                 text_size: self.width, None
+                shorten: True
+                shorten_from: "right"
 
             StatusChip:
                 text: root.status_text
@@ -1076,7 +1095,7 @@
                 color: 0.04, 0.04, 0.04, 1
                 halign: "right"
                 valign: "middle"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(52)
                 shorten: True
@@ -1095,7 +1114,7 @@
                 color: 0.04, 0.04, 0.04, 1
                 halign: "left"
                 valign: "middle"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(42)
                 shorten: True
@@ -1107,7 +1126,7 @@
                 color: 0.18, 0.18, 0.18, 1
                 halign: "left"
                 valign: "middle"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(36)
                 shorten: True
@@ -1119,7 +1138,7 @@
                 color: 0.30, 0.30, 0.30, 1
                 halign: "left"
                 valign: "middle"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(30)
                 shorten: True
@@ -1131,7 +1150,7 @@
                 color: 0.08, 0.08, 0.08, 1
                 halign: "left"
                 valign: "middle"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(34)
                 shorten: True
@@ -1143,7 +1162,7 @@
                 color: 0.25, 0.25, 0.25, 1
                 halign: "left"
                 valign: "middle"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(30)
                 shorten: True
@@ -1156,7 +1175,7 @@
                 color: 0.20, 0.20, 0.20, 1
                 halign: "left"
                 valign: "middle"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(30)
                 shorten: True
@@ -1168,7 +1187,7 @@
                 color: 0.70, 0.18, 0.16, 1
                 halign: "left"
                 valign: "middle"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(42)
                 max_lines: 2
@@ -1181,7 +1200,7 @@
                 color: 0.25, 0.25, 0.25, 1
                 halign: "left"
                 valign: "top"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(74)
                 max_lines: 3
@@ -1201,7 +1220,7 @@
                 color: 0.05, 0.05, 0.05, 1
                 halign: "left"
                 valign: "middle"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(28)
                 shorten: True
@@ -1213,7 +1232,7 @@
                 color: 0.25, 0.25, 0.25, 1
                 halign: "left"
                 valign: "middle"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(44)
                 max_lines: 2
@@ -1226,7 +1245,7 @@
                 color: 0.72, 0.08, 0.08, 1
                 halign: "left"
                 valign: "top"
-                text_size: self.width, self.height
+                text_size: self.width, None
                 size_hint_y: None
                 height: dp(54)
                 max_lines: 2
@@ -1331,157 +1350,187 @@
             text: "ЛИЧНЫЙ КАБИНЕТ"
 
         ScreenSubtitle:
-            text: "Баланс, операции, перевод и вывод ST"
-
-        CardBox:
-            orientation: "vertical"
-            size_hint_y: None
-            height: dp(82)
-
-            Label:
-                text: "Текущий баланс"
-                color: 0.34, 0.34, 0.34, 1
-                font_size: "13sp"
-                halign: "left"
-                valign: "middle"
-                text_size: self.size
-                size_hint_y: None
-                height: dp(20)
-
-            BoxLayout:
-                spacing: dp(8)
-                Image:
-                    source: icon_path("ct_coin")
-                    size_hint: None, None
-                    size: dp(28), dp(28)
-                    pos_hint: {"center_y": 0.5}
-                Label:
-                    text: root.balance_text.replace("Баланс: ", "")
-                    color: 0.03, 0.03, 0.03, 1
-                    bold: True
-                    font_size: "24sp"
-                    halign: "left"
-                    valign: "middle"
-                    text_size: self.size
-
-        AppTextInput:
-            id: search_input
-            hint_text: "Поиск по операциям"
-            multiline: False
-            on_text_validate: root.refresh()
-
-        CardBox:
-            orientation: "vertical"
-            size_hint_y: None
-            height: dp(162)
-
-            SectionLabel:
-                text: "Перевод средств"
-
-            Spinner:
-                id: finance_receiver
-                text: "Получатель"
-                values: ()
-                size_hint_y: None
-                height: dp(44)
-                background_normal: ""
-                background_color: 1, 1, 1, 1
-                color: 0.05, 0.05, 0.05, 1
-                on_text: root.on_receiver_selected(self.text)
-
-            BoxLayout:
-                spacing: dp(8)
-                size_hint_y: None
-                height: dp(44)
-
-                AppTextInput:
-                    id: transfer_amount
-                    hint_text: "Сумма ST"
-                    input_filter: "float"
-                    multiline: False
-
-                PrimaryButton:
-                    text: "Перевести"
-                    size_hint_x: None
-                    width: dp(120)
-                    on_release: root.send_transfer()
-
-        AppTextInput:
-            id: transfer_comment
-            hint_text: "Комментарий к переводу"
-            multiline: False
-
-        CardBox:
-            orientation: "vertical"
-            size_hint_y: None
-            height: dp(114)
-
-            SectionLabel:
-                text: "Вывод средств"
-
-            BoxLayout:
-                spacing: dp(8)
-                size_hint_y: None
-                height: dp(44)
-
-                AppTextInput:
-                    id: withdraw_amount
-                    hint_text: "Сумма вывода ST"
-                    input_filter: "float"
-                    multiline: False
-
-                PrimaryButton:
-                    text: "Вывести"
-                    size_hint_x: None
-                    width: dp(112)
-                    on_release: root.send_withdraw()
-
-        AppTextInput:
-            id: withdraw_comment
-            hint_text: "Куда вывести / реквизиты / комментарий"
-            multiline: False
-
-        SectionLabel:
-            text: "История операций"
+            text: "Баланс, операции, перевод и вывод рублей"
 
         ScrollView:
-            do_scroll_x: True
-            do_scroll_y: False
-            size_hint_y: None
-            height: dp(42)
-            bar_width: dp(6)
+            bar_width: dp(4)
 
             BoxLayout:
-                id: finance_header
-                orientation: "horizontal"
-                size_hint_x: None
-                height: dp(42)
-
-        RecycleView:
-            id: finance_table
-            viewclass: "FinanceTableRow"
-            do_scroll_x: True
-            do_scroll_y: True
-            scroll_type: ["bars", "content"]
-            bar_width: dp(6)
-
-            RecycleBoxLayout:
-                default_size: root.table_width, dp(52)
-                default_size_hint: None, None
-                size_hint: None, None
-                width: root.table_width
-                height: self.minimum_height
                 orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: dp(10)
+                padding: 0, 0, 0, dp(8)
 
-        Label:
-            text: root.status_text
-            color: 0.28, 0.28, 0.28, 1
-            font_size: "13sp"
-            halign: "left"
-            valign: "middle"
-            text_size: self.size
-            size_hint_y: None
-            height: dp(24)
+                CardBox:
+                    BoxLayout:
+                        spacing: dp(8)
+                        size_hint_y: None
+                        height: dp(44)
+
+                        Label:
+                            text: "Логин: " + (root.username_text or "-")
+                            color: 0.20, 0.20, 0.20, 1
+                            bold: True
+                            font_size: "15sp"
+                            halign: "left"
+                            valign: "middle"
+                            shorten: True
+                            shorten_from: "right"
+                            text_size: self.width, None
+
+                        SecondaryButton:
+                            text: "Копировать"
+                            size_hint_x: None
+                            width: dp(120)
+                            on_release: root.copy_username()
+
+                CardBox:
+                    Label:
+                        text: "Текущий баланс"
+                        color: 0.34, 0.34, 0.34, 1
+                        font_size: "13sp"
+                        halign: "left"
+                        valign: "middle"
+                        text_size: self.width, None
+                        size_hint_y: None
+                        height: self.texture_size[1]
+
+                    BoxLayout:
+                        spacing: dp(8)
+                        size_hint_y: None
+                        height: dp(34)
+                        Image:
+                            source: icon_path("ct_coin")
+                            size_hint: None, None
+                            size: dp(28), dp(28)
+                            pos_hint: {"center_y": 0.5}
+                        Label:
+                            text: root.balance_text.replace("Баланс: ", "")
+                            color: 0.03, 0.03, 0.03, 1
+                            bold: True
+                            font_size: "24sp"
+                            halign: "left"
+                            valign: "middle"
+                            text_size: self.width, None
+
+                    Label:
+                        text: root.st_balance_text
+                        color: 0.45, 0.45, 0.45, 1
+                        font_size: "12sp"
+                        halign: "left"
+                        valign: "top"
+                        text_size: self.width, None
+                        size_hint_y: None
+                        height: self.texture_size[1]
+
+                AppTextInput:
+                    id: search_input
+                    hint_text: "Поиск по операциям"
+                    multiline: False
+                    on_text_validate: root.refresh()
+
+                CardBox:
+                    SectionLabel:
+                        text: "Перевод рублей другому пользователю"
+
+                    AppTextInput:
+                        id: transfer_to_username
+                        hint_text: "Логин получателя"
+                        multiline: False
+
+                    BoxLayout:
+                        spacing: dp(8)
+                        size_hint_y: None
+                        height: dp(52)
+
+                        AppTextInput:
+                            id: transfer_amount
+                            hint_text: "Сумма, ₽"
+                            input_filter: "float"
+                            multiline: False
+
+                        PrimaryButton:
+                            text: "Перевести"
+                            size_hint_x: None
+                            width: dp(120)
+                            on_release: root.send_transfer()
+
+                    AppTextInput:
+                        id: transfer_comment
+                        hint_text: "Комментарий к переводу"
+                        multiline: False
+
+                CardBox:
+                    SectionLabel:
+                        text: "Вывод рублей"
+
+                    BoxLayout:
+                        spacing: dp(8)
+                        size_hint_y: None
+                        height: dp(52)
+
+                        AppTextInput:
+                            id: withdraw_amount
+                            hint_text: "Сумма вывода, ₽"
+                            input_filter: "float"
+                            multiline: False
+
+                        PrimaryButton:
+                            text: "Вывести"
+                            size_hint_x: None
+                            width: dp(112)
+                            on_release: root.send_withdraw()
+
+                    AppTextInput:
+                        id: withdraw_comment
+                        hint_text: "Куда вывести / реквизиты / комментарий"
+                        multiline: False
+
+                SectionLabel:
+                    text: "История операций"
+
+                ScrollView:
+                    do_scroll_x: True
+                    do_scroll_y: False
+                    size_hint_y: None
+                    height: dp(42)
+                    bar_width: dp(6)
+
+                    BoxLayout:
+                        id: finance_header
+                        orientation: "horizontal"
+                        size_hint_x: None
+                        height: dp(42)
+
+                RecycleView:
+                    id: finance_table
+                    viewclass: "FinanceTableRow"
+                    do_scroll_x: True
+                    do_scroll_y: True
+                    scroll_type: ["bars", "content"]
+                    bar_width: dp(6)
+                    size_hint_y: None
+                    height: min(dp(360), max(dp(120), finance_table_box.height))
+
+                    RecycleBoxLayout:
+                        id: finance_table_box
+                        default_size: root.table_width, dp(52)
+                        default_size_hint: None, None
+                        size_hint: None, None
+                        width: root.table_width
+                        height: self.minimum_height
+                        orientation: "vertical"
+
+                Label:
+                    text: root.status_text
+                    color: 0.28, 0.28, 0.28, 1
+                    font_size: "13sp"
+                    halign: "left"
+                    valign: "middle"
+                    text_size: self.width, None
+                    size_hint_y: None
+                    height: self.texture_size[1] + dp(6)
 
 
 <VoentorgScreen>:
@@ -1714,7 +1763,7 @@
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(186) + stage_steps_box.height
+                    height: self.minimum_height
 
                     SectionLabel:
                         text: root.status_text
@@ -1741,7 +1790,7 @@
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(148)
+                    height: self.minimum_height
 
                     SectionLabel:
                         text: "Параметры"
@@ -1753,7 +1802,7 @@
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(136)
+                    height: self.minimum_height
 
                     SectionLabel:
                         text: "Фамилии / позывные"
@@ -1765,7 +1814,7 @@
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(112)
+                    height: self.minimum_height
 
                     SectionLabel:
                         text: root.price_text
@@ -1777,7 +1826,7 @@
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(92)
+                    height: self.minimum_height
 
                     SectionLabel:
                         text: "Комментарий"
@@ -1789,7 +1838,7 @@
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(150)
+                    height: self.minimum_height
 
                     SectionLabel:
                         text: "История"
@@ -2101,9 +2150,9 @@
             font_size: "13sp"
             halign: "center"
             valign: "middle"
-            text_size: self.size
+            text_size: self.width, None
             size_hint_y: None
-            height: dp(28)
+            height: self.texture_size[1] + dp(8) if root.status_text else 0
 
         BoxLayout:
             size_hint_y: None
@@ -2186,9 +2235,9 @@
             font_size: "13sp"
             halign: "left"
             valign: "top"
-            text_size: self.size
+            text_size: self.width, None
             size_hint_y: None
-            height: dp(112)
+            height: self.texture_size[1]
 
         BoxLayout:
             size_hint_y: None
@@ -2264,140 +2313,157 @@
                 pos: self.pos
                 size: self.size
 
-        Button:
-            text: "Назад"
-            background_normal: ""
-            background_down: ""
-            background_color: 0.16, 0.19, 0.23, 1
-            color: 1, 1, 1, 1
-            bold: True
-            size_hint: None, None
-            width: dp(82)
-            height: dp(44)
-            on_release: root.goto_names()
-
-        Label:
-            text: root.title_text
-            color: 1, 1, 1, 1
-            bold: True
-            font_size: "21sp"
-            halign: "left"
-            valign: "middle"
-            text_size: self.size
-            size_hint_y: None
-            height: dp(44)
-
-        Label:
-            text: root.summary_text
-            color: 0.78, 0.83, 0.90, 1
-            font_size: "13sp"
-            halign: "left"
-            valign: "top"
-            text_size: self.size
-            size_hint_y: None
-            height: dp(132)
-
-        Label:
-            text: "Фамилии / позывные"
-            color: 1, 1, 1, 1
-            bold: True
-            font_size: "16sp"
-            halign: "left"
-            valign: "middle"
-            text_size: self.size
-            size_hint_y: None
-            height: dp(26)
-
-        Label:
-            text: root.lines_text
-            color: 0.82, 0.86, 0.92, 1
-            font_size: "14sp"
-            halign: "left"
-            valign: "top"
-            text_size: self.size
-
-        Label:
-            text: root.price_text
-            color: 0.45, 0.50, 0.30, 1
-            bold: True
-            font_size: "15sp"
-            halign: "center"
-            valign: "middle"
-            text_size: self.size
-            size_hint_y: None
-            height: dp(52)
-
-        Label:
-            text: root.pricing_label
-            color: 0.45, 0.50, 0.30, 1
-            bold: True
-            font_size: "13sp"
-            halign: "center"
-            valign: "middle"
-            text_size: self.size
-            size_hint_y: None
-            height: dp(26)
-
         BoxLayout:
             size_hint_y: None
-            height: dp(42)
-            spacing: dp(8)
-
-            IconTextButton:
-                text: "Рубли"
-                icon_source: icon_path("ruble", "light") if root.payment_method == "RUB" else icon_path("ruble")
-                selected: root.payment_method == "RUB"
-                on_release: root.set_payment_method("RUB")
-
-            IconTextButton:
-                text: "СТ"
-                icon_source: icon_path("ct_coin", "light") if root.payment_method == "ST" else icon_path("ct_coin")
-                selected: root.payment_method == "ST"
-                on_release: root.set_payment_method("ST")
-
-        AppTextInput:
-            text: root.comment_text
-            hint_text: "Комментарий к заказу"
-            multiline: False
-            font_size: "14sp"
-            on_text: root.comment_text = self.text
-
-        Label:
-            text: root.draft_status_text
-            color: 0.45, 0.50, 0.30, 1
-            font_size: "13sp"
-            halign: "center"
-            valign: "middle"
-            text_size: self.size
-            size_hint_y: None
-            height: dp(42)
-
-        BoxLayout:
-            size_hint_y: None
-            height: dp(50)
+            height: dp(44)
             spacing: dp(8)
 
             Button:
-                text: root.save_button_text
+                text: "Назад"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.45, 0.50, 0.30, 1) if root.saved else (0.88, 0.88, 0.84, 1)
-                color: (1, 1, 1, 1) if root.saved else (0.05, 0.05, 0.05, 1)
-                bold: True
-                font_size: "13sp"
-                disabled: root.saving or root.saved or root.checking_out
-                on_release: root.save_draft()
-
-            Button:
-                text: root.checkout_button_text
-                background_normal: ""
-                background_down: ""
-                background_color: 0.45, 0.50, 0.30, 1
+                background_color: 0.16, 0.19, 0.23, 1
                 color: 1, 1, 1, 1
                 bold: True
-                font_size: "13sp"
-                disabled: root.saving or root.checking_out
-                on_release: root.create_test_order()
+                size_hint: None, None
+                width: dp(82)
+                height: dp(44)
+                on_release: root.goto_names()
+
+            Label:
+                text: root.title_text
+                color: 1, 1, 1, 1
+                bold: True
+                font_size: "21sp"
+                halign: "left"
+                valign: "middle"
+                shorten: True
+                shorten_from: "right"
+                text_size: self.width, None
+
+        ScrollView:
+            bar_width: dp(4)
+
+            BoxLayout:
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: dp(10)
+                padding: 0, 0, 0, dp(8)
+
+                Label:
+                    text: root.summary_text
+                    color: 0.78, 0.83, 0.90, 1
+                    font_size: "13sp"
+                    halign: "left"
+                    valign: "top"
+                    text_size: self.width, None
+                    size_hint_y: None
+                    height: self.texture_size[1]
+
+                Label:
+                    text: "Фамилии / позывные"
+                    color: 1, 1, 1, 1
+                    bold: True
+                    font_size: "16sp"
+                    halign: "left"
+                    valign: "middle"
+                    text_size: self.size
+                    size_hint_y: None
+                    height: dp(26)
+
+                Label:
+                    text: root.lines_text
+                    color: 0.82, 0.86, 0.92, 1
+                    font_size: "14sp"
+                    halign: "left"
+                    valign: "top"
+                    text_size: self.width, None
+                    size_hint_y: None
+                    height: self.texture_size[1]
+
+                Label:
+                    text: root.price_text
+                    color: 0.45, 0.50, 0.30, 1
+                    bold: True
+                    font_size: "15sp"
+                    halign: "center"
+                    valign: "middle"
+                    text_size: self.size
+                    size_hint_y: None
+                    height: dp(52)
+
+                Label:
+                    text: root.pricing_label
+                    color: 0.45, 0.50, 0.30, 1
+                    bold: True
+                    font_size: "13sp"
+                    halign: "center"
+                    valign: "middle"
+                    text_size: self.size
+                    size_hint_y: None
+                    height: dp(26)
+
+                BoxLayout:
+                    size_hint_y: None
+                    height: dp(42)
+                    spacing: dp(8)
+
+                    IconTextButton:
+                        text: "Рубли"
+                        icon_source: icon_path("ruble", "light") if root.payment_method == "RUB" else icon_path("ruble")
+                        selected: root.payment_method == "RUB"
+                        on_release: root.set_payment_method("RUB")
+
+                    IconTextButton:
+                        text: "СТ"
+                        icon_source: icon_path("ct_coin", "light") if root.payment_method == "ST" else icon_path("ct_coin")
+                        selected: root.payment_method == "ST"
+                        on_release: root.set_payment_method("ST")
+
+                AppTextInput:
+                    text: root.comment_text
+                    hint_text: "Комментарий к заказу"
+                    multiline: False
+                    font_size: "14sp"
+                    on_text: root.comment_text = self.text
+
+                Label:
+                    text: root.draft_status_text
+                    color: 0.45, 0.50, 0.30, 1
+                    font_size: "13sp"
+                    halign: "center"
+                    valign: "middle"
+                    text_size: self.width, None
+                    size_hint_y: None
+                    height: self.texture_size[1] + dp(8)
+
+                BoxLayout:
+                    size_hint_y: None
+                    height: dp(50)
+                    spacing: dp(8)
+
+                    Button:
+                        text: root.save_button_text
+                        background_normal: ""
+                        background_down: ""
+                        background_color: (0.45, 0.50, 0.30, 1) if root.saved else (0.88, 0.88, 0.84, 1)
+                        color: (1, 1, 1, 1) if root.saved else (0.05, 0.05, 0.05, 1)
+                        bold: True
+                        font_size: "13sp"
+                        disabled: root.saving or root.saved or root.checking_out
+                        on_release: root.save_draft()
+
+                    Button:
+                        text: root.checkout_button_text
+                        background_normal: ""
+                        background_down: ""
+                        background_color: 0.45, 0.50, 0.30, 1
+                        color: 1, 1, 1, 1
+                        bold: True
+                        font_size: "13sp"
+                        disabled: root.saving or root.checking_out
+                        on_release: root.create_test_order()
 
 
 <ChevronAdminPricingScreen>:
@@ -2622,7 +2688,7 @@
         BoxLayout:
             orientation: "vertical"
             size_hint_y: None
-            height: dp(52) + max(dp(30), employee_order_title.texture_size[1] + dp(8))
+            height: self.minimum_height
             spacing: dp(2)
 
             BoxLayout:
@@ -2934,7 +3000,7 @@
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(128)
+                    height: self.minimum_height
 
                     SectionLabel:
                         text: "Сотрудник"
@@ -2946,7 +3012,7 @@
                 CardBox:
                     orientation: "vertical"
                     size_hint_y: None
-                    height: dp(214)
+                    height: self.minimum_height
 
                     SectionLabel:
                         text: "Рабочие роли"
@@ -2967,7 +3033,9 @@
                             color: 0.06, 0.06, 0.06, 1
                             halign: "left"
                             valign: "middle"
-                            text_size: self.size
+                            shorten: True
+                            shorten_from: "right"
+                            text_size: self.width, None
 
                     BoxLayout:
                         size_hint_y: None
@@ -2985,7 +3053,9 @@
                             color: 0.06, 0.06, 0.06, 1
                             halign: "left"
                             valign: "middle"
-                            text_size: self.size
+                            shorten: True
+                            shorten_from: "right"
+                            text_size: self.width, None
 
                     BoxLayout:
                         size_hint_y: None
@@ -3003,7 +3073,9 @@
                             color: 0.06, 0.06, 0.06, 1
                             halign: "left"
                             valign: "middle"
-                            text_size: self.size
+                            shorten: True
+                            shorten_from: "right"
+                            text_size: self.width, None
 
         PrimaryButton:
             text: "Сохранить"

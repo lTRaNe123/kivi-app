@@ -36,6 +36,7 @@ from kivy.properties import (
     NumericProperty,
 )
 from kivy.core.window import Window
+from kivy.core.clipboard import Clipboard
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -749,20 +750,23 @@ class UserHomeScreen(Screen):
 
 class FinanceAccountScreen(Screen):
     status_text = StringProperty("")
-    balance_text = StringProperty("Баланс: -")
+    balance_text = StringProperty("Баланс: 0.00 ₽")
+    st_balance_text = StringProperty("СТ: 0.00")
+    username_text = StringProperty("")
     page = NumericProperty(1)
     table_width = NumericProperty(dp(320))
-    users_labels = ListProperty([])
-    users_ids = ListProperty([])
-    selected_to_uid = NumericProperty(0)
     current_columns = ListProperty([])
     current_rows = ListProperty([])
 
     def on_pre_enter(self, *args):
         self.page = 1
         self.refresh()
-        if not self.users_ids:
-            self.load_users()
+
+    def copy_username(self):
+        if not self.username_text:
+            return
+        Clipboard.copy(self.username_text)
+        self.status_text = "Логин скопирован"
 
     def refresh(self):
         query = (self.ids.search_input.text or "").strip()
@@ -794,9 +798,11 @@ class FinanceAccountScreen(Screen):
         rows = table.get("rows") or []
         pagination = table.get("pagination") or {}
 
-        balance = profile.get("balance")
-        currency = profile.get("currency") or "ST"
-        self.balance_text = f"Баланс: {balance} {currency}"
+        balance = self._to_float(profile.get("balance"))
+        st_balance = self._to_float(profile.get("balance_st"))
+        self.balance_text = f"Баланс: {balance:.2f} ₽"
+        self.st_balance_text = f"СТ: {st_balance:.2f} (только для покупок в Военторге)"
+        self.username_text = str(profile.get("username") or "")
         self.current_columns = columns
         self.current_rows = rows
 
@@ -836,47 +842,13 @@ class FinanceAccountScreen(Screen):
             for row in rows
         ]
 
-    def load_users(self):
-        def worker():
-            try:
-                users = api_client.get_users()
-            except Exception:
-                return
-
-            labels = []
-            ids = []
-            for u in users:
-                uid = int(u.get("uid"))
-                if uid == api_client.user_id:
-                    continue
-                username = u.get("username") or ""
-                name = u.get("name") or ""
-                otec = u.get("otec") or ""
-                labels.append(f"{uid}. {username} {name} {otec}".strip())
-                ids.append(uid)
-
-            def ui_ok(dt, labels=labels, ids=ids):
-                self.users_labels = labels
-                self.users_ids = ids
-                self.ids.finance_receiver.values = labels
-
-            Clock.schedule_once(ui_ok)
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def on_receiver_selected(self, text):
-        if text in self.users_labels:
-            self.selected_to_uid = int(self.users_ids[self.users_labels.index(text)])
-        else:
-            self.selected_to_uid = 0
-
     def send_transfer(self):
         amount = self._amount_from_input(self.ids.transfer_amount.text)
         comment = (self.ids.transfer_comment.text or "").strip()
-        to_uid = int(self.selected_to_uid or 0)
+        to_username = (self.ids.transfer_to_username.text or "").strip()
 
-        if to_uid <= 0:
-            self.status_text = "Выберите получателя"
+        if not to_username:
+            self.status_text = "Введите логин получателя"
             return
         if amount <= 0:
             self.status_text = "Введите сумму перевода"
@@ -886,7 +858,7 @@ class FinanceAccountScreen(Screen):
 
         def worker():
             try:
-                api_client.create_finance_transfer(to_uid, amount, comment)
+                api_client.create_finance_transfer(to_username, amount, comment)
             except Exception as exc:
                 msg = f"Ошибка перевода: {exc}"
 
@@ -899,6 +871,7 @@ class FinanceAccountScreen(Screen):
             def ui_ok(dt):
                 self.ids.transfer_amount.text = ""
                 self.ids.transfer_comment.text = ""
+                self.ids.transfer_to_username.text = ""
                 self.status_text = "Перевод выполнен"
                 self.refresh()
 
@@ -942,6 +915,12 @@ class FinanceAccountScreen(Screen):
         try:
             return float((text or "").replace(",", "."))
         except ValueError:
+            return 0.0
+
+    def _to_float(self, value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
             return 0.0
 
     def open_operation_detail(self, row):
@@ -4487,8 +4466,23 @@ class SixnerInventoryApp(App):
         self._last_exit_prompt = 0
         self._last_back_key_at = 0
         self._allow_close_events_at = time.monotonic() + 0.5
+        if kivy_platform == "android":
+            self._fix_android_edge_to_edge()
         Clock.schedule_once(self._log_ui_ready, 0)
         Clock.schedule_once(self._maybe_silent_mobile_update_check, 2)
+
+    def _fix_android_edge_to_edge(self):
+        try:
+            from jnius import autoclass
+
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            WindowCompat = autoclass("androidx.core.view.WindowCompat")
+            activity = PythonActivity.mActivity
+            window = activity.getWindow()
+            WindowCompat.setDecorFitsSystemWindows(window, True)
+            Logger.info("SixnerInventoryApp: edge-to-edge disabled, system insets restored")
+        except Exception as exc:
+            Logger.warning(f"SixnerInventoryApp: edge-to-edge fix failed: {exc}")
 
     def _log_ui_ready(self, *_):
         screen = self.root.current_screen if self.root else None

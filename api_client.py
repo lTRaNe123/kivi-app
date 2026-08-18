@@ -295,18 +295,19 @@ class ApiClient:
 
     def create_finance_transfer(
         self,
-        to_uid: int,
+        to_username: str,
         amount: float,
         comment: str = "",
     ) -> Dict[str, Any]:
         """
         POST /api/finance_transfer.php
+        Перевод только в рублях, получатель указывается по логину.
         """
         if not self.user_id:
             raise ApiError("Пользователь не авторизован")
 
         data = {
-            "to_uid": to_uid,
+            "to_username": to_username,
             "amount": amount,
             "comment": comment,
             "idempotency_key": uuid.uuid4().hex,
