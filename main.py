@@ -2789,7 +2789,19 @@ class EmployeeOrdersScreen(Screen):
     page = NumericProperty(1)
     has_more = BooleanProperty(False)
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._load_generation = 0
+
+    def _perf_log(self, stage, t0, **fields):
+        if UPDATE_CHANNEL != "TEST":
+            return
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        extra = " ".join(f"{k}={v}" for k, v in fields.items())
+        Logger.info(f"ROLE_PERF role={self.role_code} stage={stage} elapsed_ms={elapsed_ms} {extra}".strip())
+
     def open_role(self, role):
+        t0 = time.monotonic()
         self.role_code = role.get("code") or ""
         self.role_title = role.get("title") or "Очередь"
         self.query_text = ""
@@ -2797,7 +2809,8 @@ class EmployeeOrdersScreen(Screen):
         self.page = 1
         self.ids.employee_search.text = ""
         self.ids.employee_orders_list.data = []
-        self.load_orders()
+        self._perf_log("screen-enter", t0)
+        self.load_orders(t0=t0)
 
     def set_queue_mode(self, mode):
         if mode not in EMPLOYEE_QUEUE_LABELS:
@@ -2806,10 +2819,14 @@ class EmployeeOrdersScreen(Screen):
         self.page = 1
         self.load_orders()
 
-    def load_orders(self):
+    def load_orders(self, t0=None):
         if not self.role_code:
             self.status_text = "Роль не выбрана"
             return
+        if t0 is None:
+            t0 = time.monotonic()
+        self._load_generation += 1
+        my_generation = self._load_generation
         self.loading = True
         self.status_text = f"Загружаем: {EMPLOYEE_QUEUE_LABELS.get(self.queue_mode, 'Очередь')}..."
         self.ids.employee_orders_list.data = []
@@ -2818,26 +2835,39 @@ class EmployeeOrdersScreen(Screen):
         queue = self.queue_mode
 
         def worker():
+            self._perf_log("request-start", t0)
             try:
                 data = api_client.get_employee_orders(self.role_code, query=query, queue=queue, page=1, limit=20)
             except Exception as exc:
+                self._perf_log("request-failed", t0)
                 msg = f"Ошибка очереди: {exc}"
 
                 def ui_fail(dt, msg=msg):
+                    if my_generation != self._load_generation:
+                        return
                     self.loading = False
                     self.status_text = msg
 
                 Clock.schedule_once(ui_fail)
                 return
 
-            def ui_ok(dt, data=data):
+            self._perf_log("request-finish", t0)
+            orders = data.get("orders") or []
+            pagination = data.get("pagination") or {}
+            rows = [self._row_payload(order) for order in orders]
+            self._perf_log("data-parse-finish", t0, item_count=len(rows))
+
+            def ui_ok(dt, data=data, rows=rows, pagination=pagination):
+                if my_generation != self._load_generation:
+                    return
                 self.loading = False
-                orders = data.get("orders") or []
-                pagination = data.get("pagination") or {}
                 self.page = int(pagination.get("page") or 1)
                 self.has_more = bool(pagination.get("has_more"))
-                self.ids.employee_orders_list.data = [self._row_payload(order) for order in orders]
-                self.status_text = "" if orders else "В этой вкладке заказов нет."
+                self._perf_log("rv-data-start", t0, item_count=len(rows))
+                self.ids.employee_orders_list.data = rows
+                self._perf_log("rv-data-finish", t0, item_count=len(rows))
+                self.status_text = "" if rows else "В этой вкладке заказов нет."
+                Clock.schedule_once(lambda dt2: self._perf_log("layout-finish", t0, item_count=len(rows)))
 
             Clock.schedule_once(ui_ok)
 
@@ -2849,6 +2879,7 @@ class EmployeeOrdersScreen(Screen):
         next_page = int(self.page) + 1
         query = (self.ids.employee_search.text or "").strip()
         queue = self.queue_mode
+        my_generation = self._load_generation
         self.loading = True
         self.status_text = "Загружаем ещё..."
 
@@ -2859,6 +2890,8 @@ class EmployeeOrdersScreen(Screen):
                 msg = f"Ошибка очереди: {exc}"
 
                 def ui_fail(dt, msg=msg):
+                    if my_generation != self._load_generation:
+                        return
                     self.loading = False
                     self.status_text = msg
 
@@ -2866,6 +2899,8 @@ class EmployeeOrdersScreen(Screen):
                 return
 
             def ui_ok(dt, data=data):
+                if my_generation != self._load_generation:
+                    return
                 self.loading = False
                 orders = data.get("orders") or []
                 pagination = data.get("pagination") or {}
