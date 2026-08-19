@@ -87,7 +87,7 @@
     font_size: "12sp"
     halign: "center"
     valign: "middle"
-    text_size: self.size
+    text_size: None, None
     size_hint: None, None
     width: max(dp(72), self.texture_size[0] + dp(22))
     height: dp(30)
@@ -3363,7 +3363,7 @@
             height: self.texture_size[1] + dp(6)
             halign: "center"
             valign: "middle"
-            text_size: self.size
+            text_size: self.width, None
 
         Label:
             text: root.header_text
@@ -3372,7 +3372,7 @@
             height: self.texture_size[1] + dp(6)
             halign: "center"
             valign: "middle"
-            text_size: self.size
+            text_size: self.width, None
 
         ScrollView:
             do_scroll_x: False

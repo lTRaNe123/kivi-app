@@ -4421,8 +4421,18 @@ class RootWidget(ScreenManager):
                 self.history.append(previous)
         self._last_current = value
 
+    def _transition_busy(self):
+        transition = self.transition
+        return bool(transition is not None and getattr(transition, "is_active", False))
+
     def navigate(self, screen_name, reset=False):
         if screen_name == self.current and not reset:
+            return
+        if self._transition_busy():
+            # Двойной тап или тап во время подвисания рендера мог бы запустить
+            # второй переход поверх ещё не завершённого первого — тогда Kivy
+            # какое-то время держит оба экрана в дереве виджетов одновременно
+            # (визуально выглядит как наложение экранов друг на друга).
             return
         if reset:
             self.history = []
@@ -4435,6 +4445,8 @@ class RootWidget(ScreenManager):
 
     def back(self):
         if not self.history:
+            return False
+        if self._transition_busy():
             return False
         previous = self.history.pop()
         if previous == self.current:
