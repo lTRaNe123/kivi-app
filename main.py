@@ -96,6 +96,17 @@ def _tracked_modal_dismiss(self, *args, **kwargs):
     return _modal_dismiss(self, *args, **kwargs)
 
 
+# Kivy's WeakMethod (used internally whenever a bound method is used as an
+# event handler, e.g. `on_release: popup.dismiss()`) stores
+# `method.__func__.__name__` and later re-resolves the handler via
+# `getattr(instance, that_name)`. Our wrapper functions must therefore be
+# named exactly like the methods they replace, or that later getattr()
+# raises AttributeError (seen as a crash on app exit/dismiss).
+_tracked_modal_open.__name__ = "open"
+_tracked_modal_open.__qualname__ = "ModalView.open"
+_tracked_modal_dismiss.__name__ = "dismiss"
+_tracked_modal_dismiss.__qualname__ = "ModalView.dismiss"
+
 ModalView.open = _tracked_modal_open
 ModalView.dismiss = _tracked_modal_dismiss
 
@@ -4519,15 +4530,30 @@ class SixnerInventoryApp(App):
         Clock.schedule_once(self._maybe_silent_mobile_update_check, 2)
 
     def _fix_android_edge_to_edge(self):
+        # WindowCompat.setDecorFitsSystemWindows() touches the view hierarchy
+        # and must run on Android's main UI thread, not the SDL/Python thread
+        # on_start() executes on - calling it directly always raised
+        # CalledFromWrongThreadException (silently swallowed as a warning),
+        # so this never actually took effect. run_on_ui_thread marshals it
+        # onto the correct thread.
         try:
-            from jnius import autoclass
+            from android.runnable import run_on_ui_thread
 
-            PythonActivity = autoclass("org.kivy.android.PythonActivity")
-            WindowCompat = autoclass("androidx.core.view.WindowCompat")
-            activity = PythonActivity.mActivity
-            window = activity.getWindow()
-            WindowCompat.setDecorFitsSystemWindows(window, True)
-            Logger.info("SixnerInventoryApp: edge-to-edge disabled, system insets restored")
+            @run_on_ui_thread
+            def _apply():
+                try:
+                    from jnius import autoclass
+
+                    PythonActivity = autoclass("org.kivy.android.PythonActivity")
+                    WindowCompat = autoclass("androidx.core.view.WindowCompat")
+                    activity = PythonActivity.mActivity
+                    window = activity.getWindow()
+                    WindowCompat.setDecorFitsSystemWindows(window, True)
+                    Logger.info("SixnerInventoryApp: edge-to-edge disabled, system insets restored")
+                except Exception as exc:
+                    Logger.warning(f"SixnerInventoryApp: edge-to-edge fix failed: {exc}")
+
+            _apply()
         except Exception as exc:
             Logger.warning(f"SixnerInventoryApp: edge-to-edge fix failed: {exc}")
 
