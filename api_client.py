@@ -822,5 +822,5 @@ class ApiClient:
 
 # ----- ГЛОБАЛЬНЫЙ КЛИЕНТ ДЛЯ main.py -----
 
-BASE_URL = "http://82.25.61.87:28920"   # сайт + PHP API, без /api в конце
+BASE_URL = "https://mobile-api.vangelagency.com"   # RU reverse-proxy -> сайт + PHP API, без /api в конце
 api_client = ApiClient(BASE_URL)

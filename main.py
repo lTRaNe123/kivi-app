@@ -76,7 +76,7 @@ from mobile_update_downloader import (
 
 
 MAX_APK_SIZE = 200 * 1024 * 1024
-ALLOWED_UPDATE_HOSTS = {"82.25.61.87"}
+ALLOWED_UPDATE_HOSTS = {"mobile-api.vangelagency.com"}
 
 
 OPEN_MODALS = []
