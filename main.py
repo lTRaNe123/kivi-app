@@ -812,7 +812,7 @@ class FinanceAccountScreen(Screen):
         balance = self._to_float(profile.get("balance"))
         st_balance = self._to_float(profile.get("balance_st"))
         self.balance_text = f"Баланс: {balance:.2f} ₽"
-        self.st_balance_text = f"СТ: {st_balance:.2f} (только для покупок в Военторге)"
+        self.st_balance_text = f"СТ: {st_balance:.2f}"
         self.username_text = str(profile.get("username") or "")
         self.current_columns = columns
         self.current_rows = rows

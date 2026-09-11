@@ -1397,32 +1397,41 @@
                         height: self.texture_size[1]
 
                     BoxLayout:
-                        spacing: dp(8)
+                        spacing: dp(16)
                         size_hint_y: None
-                        height: dp(34)
-                        Image:
-                            source: icon_path("ct_coin")
-                            size_hint: None, None
-                            size: dp(28), dp(28)
-                            pos_hint: {"center_y": 0.5}
-                        Label:
-                            text: root.balance_text.replace("Баланс: ", "")
-                            color: 0.03, 0.03, 0.03, 1
-                            bold: True
-                            font_size: "24sp"
-                            halign: "left"
-                            valign: "middle"
-                            text_size: self.width, None
+                        height: dp(36)
 
-                    Label:
-                        text: root.st_balance_text
-                        color: 0.45, 0.45, 0.45, 1
-                        font_size: "12sp"
-                        halign: "left"
-                        valign: "top"
-                        text_size: self.width, None
-                        size_hint_y: None
-                        height: self.texture_size[1]
+                        BoxLayout:
+                            spacing: dp(8)
+                            Image:
+                                source: icon_path("ruble")
+                                size_hint: None, None
+                                size: dp(26), dp(26)
+                                pos_hint: {"center_y": 0.5}
+                            Label:
+                                text: root.balance_text.replace("Баланс: ", "")
+                                color: 0.03, 0.03, 0.03, 1
+                                bold: True
+                                font_size: "22sp"
+                                halign: "left"
+                                valign: "middle"
+                                text_size: self.width, None
+
+                        BoxLayout:
+                            spacing: dp(8)
+                            Image:
+                                source: icon_path("ct_coin")
+                                size_hint: None, None
+                                size: dp(26), dp(26)
+                                pos_hint: {"center_y": 0.5}
+                            Label:
+                                text: root.st_balance_text
+                                color: 0.03, 0.03, 0.03, 1
+                                bold: True
+                                font_size: "22sp"
+                                halign: "left"
+                                valign: "middle"
+                                text_size: self.width, None
 
                 AppTextInput:
                     id: search_input
