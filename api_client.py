@@ -1,5 +1,6 @@
 # api_client.py
 import json
+import os
 import threading
 import uuid
 from dataclasses import dataclass
@@ -427,6 +428,108 @@ class ApiClient:
         if not isinstance(payload.get("option_groups") or [], list):
             raise ApiError("API конфигуратора не вернул option_groups")
         return payload
+
+    def get_chevron_photo_orders(self, scope: str = "mine") -> Dict[str, Any]:
+        """
+        GET /api/chevron_photo_orders.php?scope=mine|admin
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        payload = self._request_json(
+            "GET",
+            "chevron_photo_orders.php",
+            params={"scope": scope},
+        )
+        if not isinstance(payload.get("orders") or [], list):
+            raise ApiError("API фото-заказов не вернул orders")
+        return payload
+
+    def create_chevron_photo_order(
+        self,
+        comment: str,
+        quantity: int,
+        photo_paths: List[str],
+    ) -> Dict[str, Any]:
+        """
+        POST /api/chevron_photo_order_create.php (multipart/form-data)
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+        photo_paths = [p for p in (photo_paths or []) if p][:3]
+        if not photo_paths:
+            raise ApiError("Нужно прикрепить хотя бы одно фото")
+
+        url = self._url("chevron_photo_order_create.php")
+        headers = {}
+        if self.api_token:
+            headers["Authorization"] = f"Bearer {self.api_token}"
+
+        opened_files = []
+        try:
+            files = []
+            for path in photo_paths:
+                fh = open(path, "rb")
+                opened_files.append(fh)
+                filename = os.path.basename(path) or "photo.jpg"
+                files.append(("photos[]", (filename, fh, "application/octet-stream")))
+
+            data = {"comment": comment or "", "quantity": str(int(quantity or 1))}
+            try:
+                resp = self.session.post(
+                    url,
+                    data=data,
+                    files=files,
+                    headers=headers,
+                    timeout=30,
+                )
+            except requests.RequestException as e:
+                raise ApiError(f"Сетевая ошибка: {e}") from e
+        finally:
+            for fh in opened_files:
+                fh.close()
+
+        if resp.status_code != 200:
+            raise ApiError(f"HTTP {resp.status_code} при отправке заявки")
+
+        try:
+            payload = resp.json()
+        except json.JSONDecodeError as e:
+            text = resp.text[:200].replace("\n", " ")
+            raise ApiError(f"Неверный JSON от сервера: {text}") from e
+
+        if isinstance(payload, dict) and "success" in payload and not payload.get("success"):
+            raise ApiError(str(payload.get("error") or "Запрос отклонён сервером"))
+
+        self._absolutize_image_urls(payload)
+        return payload
+
+    def update_chevron_photo_order(
+        self,
+        order_id: int,
+        *,
+        status: str = "",
+        price_rub: Optional[str] = None,
+        price_st: Optional[str] = None,
+        admin_comment: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        POST /api/chevron_photo_order_update.php (админ)
+        """
+        if not self.user_id:
+            raise ApiError("Пользователь не авторизован")
+
+        data: Dict[str, Any] = {"order_id": str(int(order_id))}
+        if status:
+            data["status"] = status
+        if price_rub is not None:
+            data["price_rub"] = str(price_rub)
+        if price_st is not None:
+            data["price_st"] = str(price_st)
+        if admin_comment is not None:
+            data["admin_comment"] = admin_comment
+
+        return self._request_json("POST", "chevron_photo_order_update.php", data=data)
 
     def create_chevron_quote(
         self,

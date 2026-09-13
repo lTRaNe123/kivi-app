@@ -1859,6 +1859,9 @@ class ChevronOrderScreen(Screen):
         if tab_code == "single":
             self.load_kits("single")
             return
+        if tab_code == "photo":
+            App.get_running_app().navigate("chevron_photo_order")
+            return
         self.ids.chevron_kits_list.data = []
         self.status_text = "Эта вкладка будет подключена позже."
 
@@ -1870,6 +1873,393 @@ class ChevronOrderScreen(Screen):
         App.get_running_app().navigate("chevron_configurator")
 
     def goto_voentorg(self):
+        App.get_running_app().back()
+
+
+PHOTO_ORDER_STATUS_LABELS = {
+    "NEW": "Новая",
+    "REVIEWED": "Оценена",
+    "COMPLETED": "Выполнена",
+    "CANCELLED": "Отменена",
+}
+PHOTO_ORDER_STATUS_COLORS = {
+    "NEW": [0.55, 0.55, 0.55, 1],
+    "REVIEWED": [0.75, 0.55, 0.15, 1],
+    "COMPLETED": [0.36, 0.55, 0.28, 1],
+    "CANCELLED": [0.65, 0.20, 0.18, 1],
+}
+
+
+class PhotoThumbRow(RecycleDataViewBehavior, BoxLayout):
+    photo_index = NumericProperty(0)
+    path = StringProperty("")
+    filename = StringProperty("")
+
+    def refresh_view_attrs(self, rv, index, data):
+        result = super().refresh_view_attrs(rv, index, data)
+        self.photo_index = int(data.get("photo_index") or 0)
+        self.path = data.get("path") or ""
+        self.filename = data.get("filename") or ""
+        return result
+
+    def remove(self):
+        app = App.get_running_app()
+        screen = app.root.current_screen
+        if hasattr(screen, "remove_photo"):
+            screen.remove_photo(self.photo_index)
+
+
+class PhotoOrderImageRow(RecycleDataViewBehavior, BoxLayout):
+    image_url = StringProperty("")
+
+    def refresh_view_attrs(self, rv, index, data):
+        result = super().refresh_view_attrs(rv, index, data)
+        self.image_url = data.get("image_url") or ""
+        return result
+
+
+class ChevronPhotoOrderScreen(Screen):
+    photo_paths = ListProperty([])
+    comment_text = StringProperty("")
+    quantity = NumericProperty(1)
+    status_text = StringProperty("")
+    submitting = BooleanProperty(False)
+
+    def on_pre_enter(self, *args):
+        self.photo_paths = []
+        self.comment_text = ""
+        self.quantity = 1
+        self.status_text = ""
+        self.submitting = False
+        self._render_thumbs()
+
+    def _render_thumbs(self):
+        self.ids.photo_thumbs.data = [
+            {
+                "photo_index": i,
+                "path": p,
+                "filename": os.path.basename(p),
+            }
+            for i, p in enumerate(self.photo_paths)
+        ]
+
+    def pick_photo(self):
+        if len(self.photo_paths) >= 3:
+            self.status_text = "Можно прикрепить не более 3 фото"
+            return
+        try:
+            from plyer import filechooser
+        except Exception:
+            self.status_text = "Выбор файлов недоступен на этом устройстве"
+            return
+
+        def on_selection(selection):
+            if not selection:
+                return
+            path = selection[0]
+
+            def ui(dt, path=path):
+                if path and path not in self.photo_paths and len(self.photo_paths) < 3:
+                    self.photo_paths = self.photo_paths + [path]
+                    self.status_text = ""
+                    self._render_thumbs()
+
+            Clock.schedule_once(ui)
+
+        try:
+            filechooser.open_file(
+                on_selection=on_selection,
+                filters=[["Images", "*.jpg", "*.jpeg", "*.png", "*.webp"]],
+            )
+        except Exception as exc:
+            self.status_text = f"Не удалось открыть выбор файла: {exc}"
+
+    def remove_photo(self, index):
+        paths = list(self.photo_paths)
+        if 0 <= index < len(paths):
+            paths.pop(index)
+            self.photo_paths = paths
+            self._render_thumbs()
+
+    def change_quantity(self, delta):
+        self.quantity = max(1, min(50, self.quantity + delta))
+
+    def submit(self):
+        if self.submitting:
+            return
+        if not self.photo_paths:
+            self.status_text = "Прикрепите хотя бы одно фото"
+            return
+        self.submitting = True
+        self.status_text = "Отправляем заявку..."
+        comment = self.comment_text
+        quantity = self.quantity
+        photo_paths = list(self.photo_paths)
+
+        def worker():
+            try:
+                data = api_client.create_chevron_photo_order(comment, quantity, photo_paths)
+            except Exception as exc:
+                msg = f"Ошибка: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.submitting = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                self.submitting = False
+                order_id = data.get("order_id")
+                self.status_text = f"Заявка №{order_id} отправлена. Ожидайте оценки стоимости."
+                self.photo_paths = []
+                self.comment_text = ""
+                self.quantity = 1
+                self._render_thumbs()
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def goto_my_orders(self):
+        App.get_running_app().navigate("chevron_photo_orders")
+
+    def goto_chevrons(self):
+        App.get_running_app().back()
+
+
+class ChevronPhotoOrderRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
+    order_id = NumericProperty(0)
+    title = StringProperty("")
+    meta = StringProperty("")
+    status_text = StringProperty("")
+    status_color = ListProperty([0.55, 0.55, 0.55, 1])
+    image_url = StringProperty("")
+    price_text = StringProperty("")
+
+    def refresh_view_attrs(self, rv, index, data):
+        result = super().refresh_view_attrs(rv, index, data)
+        self.order_id = int(data.get("order_id") or 0)
+        self.title = data.get("title") or ""
+        self.meta = data.get("meta") or ""
+        self.status_text = data.get("status_text") or ""
+        self.status_color = data.get("status_color") or [0.55, 0.55, 0.55, 1]
+        self.image_url = data.get("image_url") or ""
+        self.price_text = data.get("price_text") or ""
+        return result
+
+    def on_release(self):
+        app = App.get_running_app()
+        screen = app.root.current_screen
+        if hasattr(screen, "handle_nav_action"):
+            screen.handle_nav_action("open_order", {"order_id": self.order_id})
+
+
+def _photo_order_rows(orders, *, with_user=False):
+    rows = []
+    for o in orders:
+        status = o.get("status") or "NEW"
+        price_rub = o.get("admin_price_rub")
+        if price_rub not in (None, ""):
+            price_text = f"{float(price_rub):.2f} ₽"
+        else:
+            price_text = "Цена ещё не назначена"
+        images = o.get("images") or []
+        meta = (o.get("comment") or "").strip() or "Без комментария"
+        if with_user:
+            meta = f"{o.get('user_label') or o.get('username') or ''} · {meta}"
+        rows.append({
+            "order_id": o.get("id"),
+            "title": f"Заявка №{o.get('id')} · {o.get('quantity') or 1} шт.",
+            "meta": meta,
+            "status_text": PHOTO_ORDER_STATUS_LABELS.get(status, status),
+            "status_color": PHOTO_ORDER_STATUS_COLORS.get(status, [0.55, 0.55, 0.55, 1]),
+            "image_url": images[0] if images else "",
+            "price_text": price_text,
+        })
+    return rows
+
+
+class ChevronPhotoOrdersScreen(Screen):
+    status_text = StringProperty("")
+
+    def on_pre_enter(self, *args):
+        self.load_orders()
+
+    def load_orders(self):
+        self.status_text = "Загружаем..."
+        self.ids.photo_orders_list.data = []
+
+        def worker():
+            try:
+                data = api_client.get_chevron_photo_orders("mine")
+            except Exception as exc:
+                msg = f"Ошибка: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                orders = data.get("orders") or []
+                self.ids.photo_orders_list.data = _photo_order_rows(orders)
+                self.status_text = "" if orders else "Заявок пока нет."
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def handle_nav_action(self, action, payload):
+        pass
+
+    def goto_chevrons(self):
+        App.get_running_app().back()
+
+    def goto_new(self):
+        App.get_running_app().navigate("chevron_photo_order")
+
+
+class ChevronPhotoOrdersAdminScreen(Screen):
+    status_text = StringProperty("")
+
+    def on_pre_enter(self, *args):
+        self.load_orders()
+
+    def load_orders(self):
+        self.status_text = "Загружаем..."
+        self.ids.photo_orders_admin_list.data = []
+
+        def worker():
+            try:
+                data = api_client.get_chevron_photo_orders("admin")
+            except Exception as exc:
+                msg = f"Ошибка: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt, data=data):
+                orders = data.get("orders") or []
+                self.ids.photo_orders_admin_list.data = _photo_order_rows(orders, with_user=True)
+                self.status_text = "" if orders else "Заявок пока нет."
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def handle_nav_action(self, action, payload):
+        if action == "open_order":
+            detail = self.manager.get_screen("chevron_photo_order_admin_detail")
+            detail.open_order(payload.get("order_id"))
+            App.get_running_app().navigate("chevron_photo_order_admin_detail")
+
+    def goto_back(self):
+        App.get_running_app().back()
+
+
+class ChevronPhotoOrderAdminDetailScreen(Screen):
+    order_id = NumericProperty(0)
+    title_text = StringProperty("")
+    meta_text = StringProperty("")
+    comment_text = StringProperty("")
+    status = StringProperty("NEW")
+    price_rub_text = StringProperty("")
+    price_st_text = StringProperty("")
+    admin_comment_text = StringProperty("")
+    status_text = StringProperty("")
+    saving = BooleanProperty(False)
+
+    def open_order(self, order_id):
+        self.order_id = int(order_id or 0)
+        self.status_text = "Загружаем..."
+        self.ids.order_images.data = []
+
+        def worker():
+            try:
+                data = api_client.get_chevron_photo_orders("admin")
+            except Exception as exc:
+                msg = f"Ошибка: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            order = next((o for o in (data.get("orders") or []) if int(o.get("id") or 0) == self.order_id), None)
+
+            def ui_ok(dt, order=order):
+                if not order:
+                    self.status_text = "Заявка не найдена"
+                    return
+                self.title_text = f"Заявка №{order.get('id')}"
+                self.meta_text = (
+                    f"{order.get('user_label') or order.get('username') or ''} · "
+                    f"{order.get('quantity') or 1} шт. · {order.get('created_at') or ''}"
+                )
+                self.comment_text = order.get("comment") or "Без комментария"
+                self.status = order.get("status") or "NEW"
+                price_rub = order.get("admin_price_rub")
+                price_st = order.get("admin_price_st")
+                self.price_rub_text = "" if price_rub in (None, "") else str(price_rub)
+                self.price_st_text = "" if price_st in (None, "") else str(price_st)
+                self.admin_comment_text = order.get("admin_comment") or ""
+                images = order.get("images") or []
+                self.ids.order_images.data = [{"image_url": u} for u in images]
+                self.status_text = ""
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def set_status(self, status):
+        self.status = status
+
+    def save(self):
+        if self.saving:
+            return
+        self.saving = True
+        self.status_text = "Сохраняем..."
+        order_id = self.order_id
+        status = self.status
+        price_rub = self.price_rub_text.strip()
+        price_st = self.price_st_text.strip()
+        admin_comment = self.admin_comment_text
+
+        def worker():
+            try:
+                api_client.update_chevron_photo_order(
+                    order_id,
+                    status=status,
+                    price_rub=price_rub or None,
+                    price_st=price_st or None,
+                    admin_comment=admin_comment,
+                )
+            except Exception as exc:
+                msg = f"Ошибка сохранения: {exc}"
+
+                def ui_fail(dt, msg=msg):
+                    self.saving = False
+                    self.status_text = msg
+
+                Clock.schedule_once(ui_fail)
+                return
+
+            def ui_ok(dt):
+                self.saving = False
+                self.status_text = "Сохранено"
+
+            Clock.schedule_once(ui_ok)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def goto_back(self):
         App.get_running_app().back()
 
 
@@ -3685,6 +4075,13 @@ class EmployeePanelScreen(Screen):
                         "action": "employee_admin_users",
                         "payload": {},
                     })
+                    rows.append({
+                        "title": "Заявки по фото",
+                        "subtitle": "Оценка и обработка заказов по фото",
+                        "icon_text": "Ф",
+                        "action": "admin_photo_orders",
+                        "payload": {},
+                    })
                 self.ids.employee_list.data = rows
                 self.status_text = "" if rows else "Нет доступных ролей сотрудника."
 
@@ -3698,6 +4095,9 @@ class EmployeePanelScreen(Screen):
             return
         if action == "employee_admin_users":
             App.get_running_app().navigate("employee_admin_users")
+            return
+        if action == "admin_photo_orders":
+            App.get_running_app().navigate("chevron_photo_orders_admin")
             return
         if action == "employee_role":
             screen = self.manager.get_screen("employee_orders")
@@ -4532,6 +4932,10 @@ class SixnerInventoryApp(App):
         sm.add_widget(ChevronOrdersScreen(name="chevron_orders"))
         sm.add_widget(ChevronOrderDetailScreen(name="chevron_order_detail"))
         sm.add_widget(ChevronOrderScreen(name="chevron_order"))
+        sm.add_widget(ChevronPhotoOrderScreen(name="chevron_photo_order"))
+        sm.add_widget(ChevronPhotoOrdersScreen(name="chevron_photo_orders"))
+        sm.add_widget(ChevronPhotoOrdersAdminScreen(name="chevron_photo_orders_admin"))
+        sm.add_widget(ChevronPhotoOrderAdminDetailScreen(name="chevron_photo_order_admin_detail"))
         sm.add_widget(ChevronKitDetailScreen(name="chevron_kit_detail"))
         sm.add_widget(ChevronConfiguratorScreen(name="chevron_configurator"))
         sm.add_widget(ChevronNamesDraftScreen(name="chevron_names_draft"))
