@@ -310,6 +310,9 @@ class ChevronOptionRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
     selection_type = StringProperty("single")
     selected = BooleanProperty(False)
     option_disabled = BooleanProperty(False)
+    indicator_kind = StringProperty("radio")
+    swatch_color = ListProperty([0.5, 0.5, 0.5, 1])
+    required_badge = StringProperty("")
 
     def refresh_view_attrs(self, rv, index, data):
         result = super().refresh_view_attrs(rv, index, data)
@@ -321,6 +324,9 @@ class ChevronOptionRow(RecycleDataViewBehavior, ButtonBehavior, BoxLayout):
         self.selection_type = data.get("selection_type") or "single"
         self.selected = bool(data.get("selected"))
         self.option_disabled = bool(data.get("option_disabled"))
+        self.indicator_kind = data.get("indicator_kind") or "radio"
+        self.swatch_color = data.get("swatch_color") or [0.5, 0.5, 0.5, 1]
+        self.required_badge = data.get("required_badge") or ""
         return result
 
     def on_release(self):
@@ -2007,6 +2013,13 @@ class ChevronConfiguratorScreen(Screen):
         required = "обязательная" if item.get("is_required") else "дополнительная"
         return f"{qty} {unit} · {required}"
 
+    SWATCH_GROUP_CODES = ("text_color", "border_color")
+    SWATCH_COLORS = {
+        "black": [0.09, 0.09, 0.09, 1],
+        "olive": [0.42, 0.47, 0.28, 1],
+        "white": [0.95, 0.95, 0.93, 1],
+    }
+
     def _render_options(self, groups):
         rows = []
         for group in groups:
@@ -2016,19 +2029,28 @@ class ChevronConfiguratorScreen(Screen):
             ]
             if not options:
                 continue
+            group_code = group.get("code") or ""
+            is_swatch_group = group_code in self.SWATCH_GROUP_CODES
             rows.append({
-                "group_code": group.get("code") or "",
+                "group_code": group_code,
                 "option_code": "",
                 "title": group.get("title") or "",
-                "mark": "обязательно" if group.get("is_required") else "",
+                "mark": "",
                 "price_text": "",
                 "selection_type": "header",
                 "selected": False,
                 "option_disabled": True,
+                "indicator_kind": "none",
+                "required_badge": "обязательно" if group.get("is_required") else "",
             })
             for option in options:
-                group_code = group.get("code") or ""
                 option_code = option.get("code") or ""
+                if is_swatch_group:
+                    indicator_kind = "swatch"
+                elif group.get("selection_type") == "multiple":
+                    indicator_kind = "checkbox"
+                else:
+                    indicator_kind = "radio"
                 rows.append({
                     "group_code": group_code,
                     "option_code": option_code,
@@ -2038,6 +2060,8 @@ class ChevronConfiguratorScreen(Screen):
                     "selection_type": group.get("selection_type") or "single",
                     "selected": self._is_selected(group_code, option_code),
                     "option_disabled": self._option_disabled(option),
+                    "indicator_kind": indicator_kind,
+                    "swatch_color": self.SWATCH_COLORS.get(option_code, [0.5, 0.5, 0.5, 1]),
                 })
         self.ids.config_options.data = rows
 

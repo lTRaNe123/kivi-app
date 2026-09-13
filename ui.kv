@@ -581,65 +581,101 @@
 <ChevronOptionRow>:
     orientation: "horizontal"
     spacing: dp(10)
-    padding: dp(12), dp(8)
+    padding: dp(4), dp(4)
     size_hint_y: None
-    height: dp(54) if root.selection_type == "header" else dp(66)
-    opacity: 0.48 if root.option_disabled and root.selection_type != "header" else 1
-    canvas.before:
-        Color:
-            rgba: (0.92, 0.94, 0.86, 1) if root.selected else ((1, 1, 1, 1) if root.selection_type != "header" else (0.94, 0.95, 0.91, 1))
-        RoundedRectangle:
-            pos: self.pos
-            size: self.size
-            radius: [dp(8)]
-        Color:
-            rgba: (0.45, 0.50, 0.30, 1) if root.selected else (0.82, 0.82, 0.80, 1)
-        Line:
-            rounded_rectangle: self.x, self.y, self.width, self.height, dp(8)
-            width: 1
+    height: dp(40) if root.selection_type == "header" else dp(42)
+    opacity: 0.42 if root.option_disabled and root.selection_type != "header" else 1
 
-    Label:
-        text: root.mark
-        color: 0.45, 0.50, 0.30, 1
-        bold: True
-        font_size: "18sp"
-        size_hint_x: None
-        width: 0 if root.selection_type == "header" else dp(30)
+    Widget:
+        id: indicator
+        size_hint: None, None
+        size: (0, 0) if root.selection_type == "header" else (dp(22), dp(22))
+        pos_hint: {"center_y": 0.5}
         opacity: 0 if root.selection_type == "header" else 1
-        halign: "center"
-        valign: "middle"
-        text_size: self.size
+        canvas:
+            # swatch: filled color circle
+            Color:
+                rgba: root.swatch_color if root.indicator_kind == "swatch" else (0, 0, 0, 0)
+            Ellipse:
+                pos: self.pos
+                size: self.size
+            Color:
+                rgba: (1, 1, 1, 0.9) if (root.indicator_kind == "swatch" and root.selected) else (0.45, 0.45, 0.42, 0.6)
+            Line:
+                ellipse: self.x - 1, self.y - 1, self.width + 2, self.height + 2
+                width: 1.6 if (root.indicator_kind == "swatch" and root.selected) else 1
+
+            # radio: outline circle
+            Color:
+                rgba: (0.62, 0.70, 0.42, 1) if (root.indicator_kind == "radio" and root.selected) else ((0.55, 0.58, 0.50, 1) if root.indicator_kind == "radio" else (0, 0, 0, 0))
+            Line:
+                ellipse: self.pos[0], self.pos[1], self.width, self.height
+                width: 1.6
+            Color:
+                rgba: (0.62, 0.70, 0.42, 1) if (root.indicator_kind == "radio" and root.selected) else (0, 0, 0, 0)
+            Ellipse:
+                pos: self.center_x - dp(5), self.center_y - dp(5)
+                size: dp(10), dp(10)
+
+            # checkbox: rounded square, filled when selected
+            Color:
+                rgba: (0.62, 0.70, 0.42, 1) if (root.indicator_kind == "checkbox" and root.selected) else ((0.55, 0.58, 0.50, 1) if root.indicator_kind == "checkbox" else (0, 0, 0, 0))
+            Line:
+                rounded_rectangle: self.x, self.y, self.width, self.height, dp(5)
+                width: 1.6
+            Color:
+                rgba: (0.62, 0.70, 0.42, 1) if (root.indicator_kind == "checkbox" and root.selected) else (0, 0, 0, 0)
+            RoundedRectangle:
+                pos: self.pos
+                size: self.size
+                radius: [dp(5)]
+            Color:
+                rgba: (1, 1, 1, 1) if (root.indicator_kind == "checkbox" and root.selected) else (0, 0, 0, 0)
+            Line:
+                points: [self.x + dp(4), self.y + dp(11), self.x + dp(9), self.y + dp(5), self.x + dp(18), self.y + dp(16)]
+                width: 1.8
+                cap: "round"
+                joint: "round"
 
     BoxLayout:
         orientation: "vertical"
-        spacing: dp(2)
+        spacing: dp(1)
 
-        Label:
-            text: root.title
-            color: 0.05, 0.05, 0.05, 1
-            bold: True
-            font_size: "15sp" if root.selection_type != "header" else "17sp"
-            halign: "left"
-            valign: "middle"
-            text_size: self.width, None
+        BoxLayout:
+            spacing: dp(6)
+            size_hint_y: None
+            height: self.minimum_height
+
+            Label:
+                text: root.title
+                color: (0.80, 0.84, 0.72, 1) if root.selection_type == "header" else ((0.90, 0.94, 0.84, 1) if root.selected else (0.86, 0.88, 0.84, 1))
+                bold: True
+                font_size: "13sp" if root.selection_type == "header" else "14sp"
+                halign: "left"
+                valign: "bottom" if root.selection_type == "header" else "middle"
+                text_size: self.width, None
+                size_hint_y: None
+                height: self.texture_size[1] + (dp(10) if root.selection_type == "header" else dp(4))
+
+            Label:
+                text: root.required_badge
+                color: 0.72, 0.42, 0.30, 1
+                font_size: "10sp"
+                size_hint_x: None
+                width: self.texture_size[0] if root.required_badge else 0
+                halign: "left"
+                valign: "middle"
+                text_size: None, self.height
 
         Label:
             text: root.price_text
-            color: 0.36, 0.36, 0.36, 1
-            font_size: "13sp"
+            color: 0.55, 0.60, 0.66, 1
+            font_size: "11sp"
             halign: "left"
-            valign: "middle"
-            text_size: self.size
-
-    Label:
-        text: "Выбрано" if root.selected else ""
-        color: 0.45, 0.50, 0.30, 1
-        font_size: "13sp"
-        size_hint_x: None
-        width: 0 if root.selection_type == "header" else dp(78)
-        halign: "right"
-        valign: "middle"
-        text_size: self.size
+            valign: "top"
+            text_size: self.width, None
+            size_hint_y: None
+            height: self.texture_size[1] if root.price_text else 0
 
 
 <ChevronNameLineRow>:
@@ -1915,36 +1951,64 @@
         BoxLayout:
             size_hint_y: None
             height: dp(42)
-            spacing: dp(6)
+            padding: dp(3)
+            canvas.before:
+                Color:
+                    rgba: 0.90, 0.90, 0.86, 1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [dp(10)]
 
             Button:
                 text: "Комплекты"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.90, 0.93, 0.82, 1) if root.active_tab == "kits" else (1, 1, 1, 1)
-                color: 0.05, 0.05, 0.05, 1
+                background_color: 0, 0, 0, 0
+                color: (1, 1, 1, 1) if root.active_tab == "kits" else (0.30, 0.30, 0.28, 1)
                 bold: True
-                font_size: "13sp"
+                font_size: "12sp"
+                canvas.before:
+                    Color:
+                        rgba: (0.45, 0.50, 0.30, 1) if root.active_tab == "kits" else (0, 0, 0, 0)
+                    RoundedRectangle:
+                        pos: self.pos
+                        size: self.size
+                        radius: [dp(8)]
                 on_release: root.select_tab("kits")
 
             Button:
                 text: "Штучные"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.90, 0.93, 0.82, 1) if root.active_tab == "single" else (1, 1, 1, 1)
-                color: 0.05, 0.05, 0.05, 1
+                background_color: 0, 0, 0, 0
+                color: (1, 1, 1, 1) if root.active_tab == "single" else (0.30, 0.30, 0.28, 1)
                 bold: True
-                font_size: "13sp"
+                font_size: "12sp"
+                canvas.before:
+                    Color:
+                        rgba: (0.45, 0.50, 0.30, 1) if root.active_tab == "single" else (0, 0, 0, 0)
+                    RoundedRectangle:
+                        pos: self.pos
+                        size: self.size
+                        radius: [dp(8)]
                 on_release: root.select_tab("single")
 
             Button:
                 text: "На заказ по фото"
                 background_normal: ""
                 background_down: ""
-                background_color: (0.90, 0.93, 0.82, 1) if root.active_tab == "photo" else (1, 1, 1, 1)
-                color: 0.05, 0.05, 0.05, 1
+                background_color: 0, 0, 0, 0
+                color: (1, 1, 1, 1) if root.active_tab == "photo" else (0.30, 0.30, 0.28, 1)
                 bold: True
-                font_size: "13sp"
+                font_size: "12sp"
+                canvas.before:
+                    Color:
+                        rgba: (0.45, 0.50, 0.30, 1) if root.active_tab == "photo" else (0, 0, 0, 0)
+                    RoundedRectangle:
+                        pos: self.pos
+                        size: self.size
+                        radius: [dp(8)]
                 on_release: root.select_tab("photo")
 
         RecycleView:
@@ -2146,12 +2210,13 @@
             bar_width: dp(4)
 
             RecycleBoxLayout:
-                default_size: None, dp(66)
+                default_size: None, dp(42)
                 default_size_hint: 1, None
                 size_hint_y: None
                 height: self.minimum_height
                 orientation: "vertical"
-                spacing: dp(7)
+                spacing: dp(1)
+                padding: dp(6), 0
 
         Label:
             text: root.status_text
