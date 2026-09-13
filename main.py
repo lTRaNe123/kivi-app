@@ -1947,6 +1947,80 @@ class ChevronPhotoOrderScreen(Screen):
         if len(self.photo_paths) >= 3:
             self.status_text = "Можно прикрепить не более 3 фото"
             return
+        if kivy_platform == "android":
+            self._pick_photo_android()
+        else:
+            self._pick_photo_desktop()
+
+    def _add_photo(self, path):
+        if path and path not in self.photo_paths and len(self.photo_paths) < 3:
+            self.photo_paths = self.photo_paths + [path]
+            self.status_text = ""
+            self._render_thumbs()
+
+    def _pick_photo_android(self):
+        try:
+            from jnius import autoclass
+            from android import activity
+        except Exception as exc:
+            self.status_text = f"Галерея недоступна: {exc}"
+            return
+
+        Intent = autoclass("android.content.Intent")
+        MediaStoreImagesMedia = autoclass("android.provider.MediaStore$Images$Media")
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        current_activity = PythonActivity.mActivity
+
+        request_code = 91231
+
+        def on_activity_result(request, result_code, data):
+            if request != request_code:
+                return
+            activity.unbind(on_activity_result=on_activity_result)
+            if result_code != -1 or data is None:
+                return
+            uri = data.getData()
+            if uri is None:
+                return
+            try:
+                path = self._copy_content_uri_to_cache(current_activity, uri)
+            except Exception as exc:
+                path = None
+
+                def ui_fail(dt, exc=exc):
+                    self.status_text = f"Не удалось прочитать фото: {exc}"
+
+                Clock.schedule_once(ui_fail)
+                return
+            if path:
+                Clock.schedule_once(lambda dt, path=path: self._add_photo(path))
+
+        activity.bind(on_activity_result=on_activity_result)
+        try:
+            intent = Intent(Intent.ACTION_PICK, MediaStoreImagesMedia.EXTERNAL_CONTENT_URI)
+            intent.setType("image/*")
+            current_activity.startActivityForResult(intent, request_code)
+        except Exception as exc:
+            activity.unbind(on_activity_result=on_activity_result)
+            self.status_text = f"Не удалось открыть галерею: {exc}"
+
+    def _copy_content_uri_to_cache(self, current_activity, uri):
+        resolver = current_activity.getContentResolver()
+        pfd = resolver.openFileDescriptor(uri, "r")
+        if pfd is None:
+            raise RuntimeError("пустой дескриптор файла")
+        fd = pfd.detachFd()
+        cache_dir = current_activity.getCacheDir().getAbsolutePath()
+        dest_path = os.path.join(cache_dir, f"photo_order_{uuid.uuid4().hex}.jpg")
+        with os.fdopen(fd, "rb") as src, open(dest_path, "wb") as dst:
+            while True:
+                chunk = src.read(65536)
+                if not chunk:
+                    break
+                dst.write(chunk)
+        return dest_path
+
+    def _pick_photo_desktop(self):
         try:
             from plyer import filechooser
         except Exception:
@@ -1957,14 +2031,7 @@ class ChevronPhotoOrderScreen(Screen):
             if not selection:
                 return
             path = selection[0]
-
-            def ui(dt, path=path):
-                if path and path not in self.photo_paths and len(self.photo_paths) < 3:
-                    self.photo_paths = self.photo_paths + [path]
-                    self.status_text = ""
-                    self._render_thumbs()
-
-            Clock.schedule_once(ui)
+            Clock.schedule_once(lambda dt, path=path: self._add_photo(path))
 
         try:
             filechooser.open_file(
