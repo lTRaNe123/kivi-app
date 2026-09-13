@@ -122,7 +122,24 @@ class ApiClient:
                 err = payload.get("error") or "Запрос отклонён сервером"
                 raise ApiError(str(err))
 
+        self._absolutize_image_urls(payload)
         return payload
+
+    def _absolutize_image_urls(self, obj):
+        """
+        Сервер отдаёт image_url как относительный путь ("/assets/..."),
+        а виджетам (AsyncImage) нужен полный URL с хостом.
+        """
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if key == "image_url" and isinstance(value, str) and value.startswith("/"):
+                    obj[key] = self.cfg.base_url + value
+                else:
+                    self._absolutize_image_urls(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                self._absolutize_image_urls(item)
+        return obj
 
     # ----- публичные методы -----
 

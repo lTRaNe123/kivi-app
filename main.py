@@ -1808,17 +1808,17 @@ class ChevronOrderScreen(Screen):
 
     def on_pre_enter(self, *args):
         self.active_tab = "kits"
-        self.load_kits()
+        self.load_kits("set")
 
-    def load_kits(self):
-        self.status_text = "Загружаем комплекты..."
+    def load_kits(self, kit_type):
+        self.status_text = "Загружаем..."
         self.ids.chevron_kits_list.data = []
 
         def worker():
             try:
                 data = api_client.get_chevron_kits()
             except Exception as exc:
-                msg = f"Ошибка комплектов: {exc}"
+                msg = f"Ошибка загрузки: {exc}"
 
                 def ui_fail(dt, msg=msg):
                     self.status_text = msg
@@ -1827,7 +1827,8 @@ class ChevronOrderScreen(Screen):
                 return
 
             def ui_ok(dt, data=data):
-                kits = data.get("kits") or []
+                all_kits = data.get("kits") or []
+                kits = [k for k in all_kits if (k.get("kit_type") or "set") == kit_type]
                 self.ids.chevron_kits_list.data = [
                     {
                         "title": kit.get("title") or "",
@@ -1839,7 +1840,12 @@ class ChevronOrderScreen(Screen):
                     }
                     for kit in kits
                 ]
-                self.status_text = "" if kits else "Комплекты не найдены на сервере."
+                if kits:
+                    self.status_text = ""
+                elif kit_type == "single":
+                    self.status_text = "Штучные позиции не найдены на сервере."
+                else:
+                    self.status_text = "Комплекты не найдены на сервере."
 
             Clock.schedule_once(ui_ok)
 
@@ -1848,10 +1854,13 @@ class ChevronOrderScreen(Screen):
     def select_tab(self, tab_code):
         self.active_tab = tab_code
         if tab_code == "kits":
-            self.load_kits()
+            self.load_kits("set")
+            return
+        if tab_code == "single":
+            self.load_kits("single")
             return
         self.ids.chevron_kits_list.data = []
-        self.status_text = "Эта вкладка будет подключена после ветки комплектов."
+        self.status_text = "Эта вкладка будет подключена позже."
 
     def handle_nav_action(self, action, payload):
         if action != "kit":

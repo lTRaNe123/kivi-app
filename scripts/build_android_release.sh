@@ -2,10 +2,10 @@
 set -euo pipefail
 
 SIGNING_ENV="${VOSK_SIGNING_ENV:-/home/openclaw/.openclaw/secrets/vosk-release/signing.env}"
-EXPECTED_VERSION_NAME="0.1.25"
-EXPECTED_VERSION_CODE="26"
+EXPECTED_VERSION_NAME="0.1.26"
+EXPECTED_VERSION_CODE="27"
 EXPECTED_PACKAGE_NAME="org.vangelagency.strigmobile"
-EXPECTED_APK_NAME="vosk-0.1.25-code26-arm64-release.apk"
+EXPECTED_APK_NAME="vosk-0.1.26-code27-arm64-release.apk"
 RELEASE_OUTPUT_DIR="${VOSK_RELEASE_OUTPUT_DIR:-/home/openclaw/.openclaw/projects/vangel-agency/releases/android}"
 
 if [[ -f "${SIGNING_ENV}" ]]; then
