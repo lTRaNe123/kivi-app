@@ -3042,10 +3042,32 @@ class ChevronQuoteConfirmScreen(Screen):
                 self.checking_out = False
                 self.checkout_button_text = "Тестовый заказ создан"
                 self.draft_status_text = f"Тестовый заказ создан. Средства не списаны. Номер: {number}"
+                self._show_order_created_popup(number)
 
             Clock.schedule_once(ui_ok)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _show_order_created_popup(self, order_number):
+        content = BoxLayout(orientation="vertical", padding=dp(14), spacing=dp(12))
+        content.add_widget(make_inventory_label(
+            f"Заказ №{order_number} создан.\nСредства не списаны (тестовый режим)."
+        ))
+        row = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(8))
+        close_btn = Button(text="Закрыть")
+        orders_btn = Button(text="Мои заказы")
+        row.add_widget(close_btn)
+        row.add_widget(orders_btn)
+        content.add_widget(row)
+        popup = Popup(title="Готово", content=content, size_hint=(0.9, 0.4), auto_dismiss=False)
+        close_btn.bind(on_release=popup.dismiss)
+
+        def go_to_orders(*_):
+            popup.dismiss()
+            App.get_running_app().navigate("chevron_orders")
+
+        orders_btn.bind(on_release=go_to_orders)
+        popup.open()
 
 
 class ChevronAdminPricingScreen(Screen):
@@ -3152,7 +3174,8 @@ class ChevronAdminPricingScreen(Screen):
         card = self._card(dp(208))
         card.add_widget(self._label(kit.get("title") or kit.get("code") or "Комплект", bold=True))
         rub = self._input(kit.get("price_rub"), "Цена ₽")
-        st = self._input(kit.get("price_st"), "Цена СТ")
+        st = self._input(kit.get("price_st"), "Цена СТ (авто, можно поправить)")
+        self._bind_auto_st(rub, st)
         unit = Spinner(
             text=kit.get("pricing_unit") or "PER_SET",
             values=("PER_SET", "PER_LINE", "PER_ITEM"),
@@ -3169,12 +3192,44 @@ class ChevronAdminPricingScreen(Screen):
         card = self._card(dp(154))
         card.add_widget(self._label(option.get("title") or option.get("code") or "Опция", bold=True))
         rub = self._input(option.get("price_rub"), "Доплата ₽")
-        st = self._input(option.get("price_st"), "Доплата СТ")
+        st = self._input(option.get("price_st"), "Доплата СТ (авто, можно поправить)")
+        self._bind_auto_st(rub, st)
         key = (group.get("code"), option.get("code"))
         self.option_fields[key] = {"price_rub": rub, "price_st": st}
         card.add_widget(rub)
         card.add_widget(st)
         return card
+
+    def _bind_auto_st(self, rub_input, st_input):
+        # ST is derived from RUB using the global rate, rounded to the nearest
+        # 0.25 - admins can still hand-edit it; once they touch the ST field
+        # directly we stop overwriting it so their override sticks.
+        state = {"manual": False}
+
+        def on_st_focus(instance, focused, state=state):
+            if focused:
+                state["manual"] = True
+
+        st_input.bind(focus=on_st_focus)
+
+        def on_rub_text(instance, value, state=state, st_input=st_input):
+            if state["manual"]:
+                return
+            rate_field = self.settings_fields.get("st_rate_rub") if self.settings_fields else None
+            try:
+                rate = float((rate_field.text if rate_field else "").strip())
+            except (TypeError, ValueError):
+                rate = 0
+            try:
+                rub_val = float((value or "").strip())
+            except (TypeError, ValueError):
+                return
+            if rate <= 0:
+                return
+            st_val = round(rub_val / rate * 4) / 4
+            st_input.text = f"{st_val:.2f}"
+
+        rub_input.bind(text=on_rub_text)
 
     def _card(self, height):
         card = BoxLayout(orientation="vertical", padding=dp(12), spacing=dp(8), size_hint_y=None, height=height)
@@ -4974,6 +5029,7 @@ class RootWidget(ScreenManager):
 
 class SixnerInventoryApp(App):
     is_android = BooleanProperty(kivy_platform == "android")
+    nav_inset_dp = NumericProperty(0)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -4986,6 +5042,7 @@ class SixnerInventoryApp(App):
     def build(self):
         self.title = "ВОСК"
         Window.clearcolor = (0.965, 0.965, 0.95, 1)
+        Window.softinput_mode = "below_target"
         if platform.system() == "Windows":
             Window.size = (430, 850)
             Window.minimum_width = 360
@@ -5030,6 +5087,7 @@ class SixnerInventoryApp(App):
         self._allow_close_events_at = time.monotonic() + 0.5
         if kivy_platform == "android":
             self._fix_android_edge_to_edge()
+            self._setup_android_insets()
         Clock.schedule_once(self._log_ui_ready, 0)
         Clock.schedule_once(self._maybe_silent_mobile_update_check, 2)
 
@@ -5060,6 +5118,60 @@ class SixnerInventoryApp(App):
             _apply()
         except Exception as exc:
             Logger.warning(f"SixnerInventoryApp: edge-to-edge fix failed: {exc}")
+
+    def _setup_android_insets(self):
+        # Android 15 (API 35) ignores setDecorFitsSystemWindows(True) - edge-to-edge
+        # stays forced on regardless, so content can render under the gesture/nav
+        # bar. Instead of fighting that, read the real system-bar inset and expose
+        # it as app.nav_inset_dp so screens can pad their bottom CTA row by it.
+        try:
+            from android.runnable import run_on_ui_thread
+            from jnius import autoclass, PythonJavaClass, java_method
+
+            WindowInsetsCompat = autoclass("androidx.core.view.WindowInsetsCompat")
+            WindowInsetsCompatType = autoclass("androidx.core.view.WindowInsetsCompat$Type")
+            ViewCompat = autoclass("androidx.core.view.ViewCompat")
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+
+            app = self
+
+            class InsetsListener(PythonJavaClass):
+                __javainterfaces__ = ["androidx/core/view/OnApplyWindowInsetsListener"]
+                __javacontext__ = "app"
+
+                @java_method(
+                    "(Landroid/view/View;Landroidx/core/view/WindowInsetsCompat;)"
+                    "Landroidx/core/view/WindowInsetsCompat;"
+                )
+                def onApplyWindowInsets(self, view, insets):
+                    try:
+                        bars = insets.getInsets(WindowInsetsCompatType.systemBars())
+                        density = view.getResources().getDisplayMetrics().density
+                        bottom_dp = (bars.bottom / density) if density else 0
+
+                        def set_prop(dt, bottom_dp=bottom_dp):
+                            app.nav_inset_dp = bottom_dp
+
+                        Clock.schedule_once(set_prop)
+                    except Exception as exc:
+                        Logger.warning(f"SixnerInventoryApp: insets read failed: {exc}")
+                    return insets
+
+            @run_on_ui_thread
+            def _apply():
+                try:
+                    activity = PythonActivity.mActivity
+                    decor = activity.getWindow().getDecorView()
+                    listener = InsetsListener()
+                    self._insets_listener = listener  # keep a strong reference alive
+                    ViewCompat.setOnApplyWindowInsetsListener(decor, listener)
+                    ViewCompat.requestApplyInsets(decor)
+                except Exception as exc:
+                    Logger.warning(f"SixnerInventoryApp: insets listener setup failed: {exc}")
+
+            _apply()
+        except Exception as exc:
+            Logger.warning(f"SixnerInventoryApp: insets setup failed: {exc}")
 
     def _log_ui_ready(self, *_):
         screen = self.root.current_screen if self.root else None
